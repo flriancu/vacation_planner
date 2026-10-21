@@ -9,6 +9,8 @@ const USERINFO = 'https://www.googleapis.com/oauth2/v3/userinfo';
 const EARLY_MS = 60_000;
 
 export class AuthExpiredError extends Error {
+  /** StorageFailure: the user has to sign in again. */
+  readonly needsSignIn = true;
   constructor() {
     super('Google session expired');
   }
@@ -16,7 +18,8 @@ export class AuthExpiredError extends Error {
 
 export class SignInError extends Error {
   constructor(
-    readonly reason: 'popup' | 'drive_denied' | 'not_ready' | 'google',
+    /** `blocked`: Google's script couldn't load (an extension or network); `other_account`: a reconnect came back as someone else. */
+    readonly reason: 'popup' | 'drive_denied' | 'not_ready' | 'blocked' | 'other_account' | 'google',
     message: string,
   ) {
     super(message);
@@ -60,6 +63,7 @@ export class GoogleAuth {
   private client: google.accounts.oauth2.TokenClient | null = null;
   private token: string | null = null;
   private session: Session | null = null;
+  private loadFailed = false;
 
   constructor(
     private readonly clientId: string,
@@ -67,14 +71,19 @@ export class GoogleAuth {
     private readonly requiredScope: string,
   ) {}
 
-  /** Loads Google's script ahead of the click, so the popup opens inside the click. */
+  /** Loads Google's script ahead of the click, so the popup opens inside the click. Never rejects. */
   async preload(): Promise<void> {
-    await loadGis();
-    this.client ??= window.google!.accounts!.oauth2!.initTokenClient({
-      client_id: this.clientId,
-      scope: this.scopes.join(' '),
-      callback: () => {},
-    });
+    try {
+      await loadGis();
+      this.loadFailed = false;
+      this.client ??= window.google!.accounts!.oauth2!.initTokenClient({
+        client_id: this.clientId,
+        scope: this.scopes.join(' '),
+        callback: () => {},
+      });
+    } catch {
+      this.loadFailed = true; // reported on the next click, as "blocked" rather than "still loading"
+    }
   }
 
   get current(): Session | null {
@@ -87,12 +96,18 @@ export class GoogleAuth {
     return this.token;
   }
 
-  /** Call from a click. `hint` pre-selects the account used last time. */
-  async signIn(hint?: string): Promise<Session> {
+  /**
+   * Call from a click. `hint` pre-selects the account used last time. With `expectSub` (a
+   * reconnect) a different account is refused, and the current session is left as it was.
+   */
+  async signIn(hint?: string, expectSub?: string): Promise<Session> {
     const client = this.client;
     if (!client) {
+      const failed = this.loadFailed;
       void this.preload();
-      throw new SignInError('not_ready', 'Google sign-in is still loading');
+      throw failed
+        ? new SignInError('blocked', 'Google sign-in could not load')
+        : new SignInError('not_ready', 'Google sign-in is still loading');
     }
     const response = await new Promise<google.accounts.oauth2.TokenResponse>((resolve, reject) => {
       client.callback = (r) => (r.error ? reject(new SignInError('google', r.error_description || r.error)) : resolve(r));
@@ -102,14 +117,10 @@ export class GoogleAuth {
     if (!window.google!.accounts!.oauth2!.hasGrantedAllScopes(response, this.requiredScope)) {
       throw new SignInError('drive_denied', 'Google Drive access was not granted');
     }
-    const info = await fetch(USERINFO, { headers: { Authorization: `Bearer ${response.access_token}` } });
-    if (!info.ok) throw new SignInError('google', `userinfo ${info.status}`);
-    const u = (await info.json()) as { sub: string; name?: string; email?: string };
+    const user = await readUser(response.access_token);
+    if (expectSub && user.sub !== expectSub) throw new SignInError('other_account', 'A different Google account answered');
     this.token = response.access_token;
-    this.session = {
-      user: { sub: u.sub, name: u.name || u.email || 'Me', email: u.email || '' },
-      expiresAt: Date.now() + response.expires_in * 1000 - EARLY_MS,
-    };
+    this.session = { user, expiresAt: Date.now() + response.expires_in * 1000 - EARLY_MS };
     keep({ token: this.token, session: this.session });
     return this.session;
   }
@@ -134,6 +145,22 @@ export class GoogleAuth {
   }
 }
 
+/** Who signed in. Without a `sub` there is no account to save for, so that is a failed sign-in. */
+async function readUser(token: string): Promise<GoogleUser> {
+  const info = await fetch(USERINFO, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
+  if (!info.ok) throw new SignInError('google', `userinfo ${info.status}`);
+  const u = (await info.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!isUser({ sub: u.sub, name: '', email: '' })) throw new SignInError('google', 'userinfo without an account id');
+  const email = typeof u.email === 'string' ? u.email : '';
+  const name = typeof u.name === 'string' && u.name.trim() ? u.name : email || 'Me';
+  return { sub: u.sub as string, name, email };
+}
+
+function isUser(u: unknown): u is GoogleUser {
+  const v = u as Partial<GoogleUser> | null;
+  return typeof v?.sub === 'string' && v.sub !== '' && typeof v.name === 'string' && typeof v.email === 'string';
+}
+
 /**
  * The session survives reloads in the same tab via sessionStorage, which the browser clears
  * when the tab closes. It is never written to localStorage.
@@ -152,8 +179,9 @@ function keep(value: { token: string; session: Session } | null) {
 function readKept(): { token: string; session: Session } | null {
   try {
     const raw = sessionStorage.getItem(SESSION_KEY);
-    const value = raw ? (JSON.parse(raw) as { token?: unknown; session?: Session }) : null;
-    return value && typeof value.token === 'string' && value.session?.user?.sub ? (value as { token: string; session: Session }) : null;
+    const value = raw ? (JSON.parse(raw) as { token?: unknown; session?: Partial<Session> }) : null;
+    const ok = typeof value?.token === 'string' && isUser(value.session?.user) && Number.isFinite(value.session?.expiresAt);
+    return ok ? (value as { token: string; session: Session }) : null;
   } catch {
     return null;
   }

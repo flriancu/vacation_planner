@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { UnsupportedPlanError } from '../../src/domain/migrate';
 import { AuthExpiredError } from '../../src/google/auth';
+import { DriveError, PlanFileGoneError } from '../../src/google/drive';
 import { DriveStorage } from '../../src/storage/DriveStorage';
 import { DocBuilder } from '../fixtures/builder';
 
-type Call = { url: string; method: string; headers: Record<string, string>; body?: string };
+type Call = { url: string; method: string; headers: Record<string, string>; body?: string; init: RequestInit };
 
 /** A fake Drive: answers by URL pattern and records every request. */
 function fakeDrive(routes: [RegExp, (call: Call) => { status?: number; json?: unknown; text?: string }][]) {
@@ -15,6 +16,7 @@ function fakeDrive(routes: [RegExp, (call: Call) => { status?: number; json?: un
       method: init.method ?? 'GET',
       headers: init.headers as Record<string, string>,
       ...(typeof init.body === 'string' && { body: init.body }),
+      init,
     };
     calls.push(call);
     const route = routes.find(([re]) => re.test(`${call.method} ${url}`));
@@ -54,7 +56,7 @@ describe('DriveStorage', () => {
   it('loads and checks the file', async () => {
     const doc = new DocBuilder().doc;
     fakeDrive([
-      [/fields=version$/, () => ({ json: { version: '5' } })],
+      [/fields=version,trashed$/, () => ({ json: { version: '5' } })],
       [/alt=media$/, () => ({ json: doc })],
     ]);
     const loaded = await storage().load('f1');
@@ -64,7 +66,7 @@ describe('DriveStorage', () => {
 
   it('refuses a file with an unknown schema', async () => {
     fakeDrive([
-      [/fields=version$/, () => ({ json: { version: '5' } })],
+      [/fields=version,trashed$/, () => ({ json: { version: '5' } })],
       [/alt=media$/, () => ({ json: { schemaVersion: 9 } })],
     ]);
     await expect(storage().load('f1')).rejects.toBeInstanceOf(UnsupportedPlanError);
@@ -72,7 +74,7 @@ describe('DriveStorage', () => {
 
   it('writes when the version is unchanged, and returns the new version', async () => {
     const calls = fakeDrive([
-      [/^GET .*fields=version$/, () => ({ json: { version: '6' } })],
+      [/^GET .*fields=version,trashed$/, () => ({ json: { version: '6' } })],
       [/^PATCH .*uploadType=media/, () => ({ json: { version: '7' } })],
     ]);
     expect(await storage().save('f1', new DocBuilder().doc, '6')).toEqual({ ok: true, version: '7' });
@@ -80,9 +82,68 @@ describe('DriveStorage', () => {
   });
 
   it('reports a conflict without writing when another device saved in between', async () => {
-    const calls = fakeDrive([[/^GET .*fields=version$/, () => ({ json: { version: '8' } })]]);
+    const calls = fakeDrive([[/^GET .*fields=version,trashed$/, () => ({ json: { version: '8' } })]]);
     expect(await storage().save('f1', new DocBuilder().doc, '6')).toEqual({ ok: false, conflict: true });
     expect(calls).toHaveLength(1);
+  });
+
+  it('never answers from the HTTP cache, never follows redirects, and gives up on a call that hangs', async () => {
+    const calls = fakeDrive([[/fields=version,trashed$/, () => ({ json: { version: '5' } })]]);
+    await storage().version('f1');
+    expect(calls[0]!.init.cache).toBe('no-store');
+    expect(calls[0]!.init.redirect).toBe('error');
+    expect(calls[0]!.init.signal).toBeInstanceOf(AbortSignal);
+
+    vi.stubGlobal('fetch', async () => {
+      throw new DOMException('timed out', 'TimeoutError');
+    });
+    const hung = await storage()
+      .version('f1')
+      .catch((e: unknown) => e);
+    expect(hung).toBeInstanceOf(DriveError);
+    expect((hung as DriveError).status).toBe(0);
+    expect((hung as DriveError).retryable).toBe(true);
+  });
+
+  it('reads every page of the file list, oldest first, and keeps only my own files', async () => {
+    const calls = fakeDrive([
+      [/pageToken=p2/, () => ({ json: { files: [{ id: 'f2', version: '1' }] } })],
+      [
+        /^GET .*\/drive\/v3\/files\?/,
+        () => ({
+          json: {
+            files: [
+              { id: 'f1', version: '3' },
+              { id: 'shared', version: '1', ownedByMe: false },
+            ],
+            nextPageToken: 'p2',
+          },
+        }),
+      ],
+    ]);
+    expect((await storage().listCalendars()).map((c) => c.calendarId)).toEqual(['f1', 'f2']);
+    expect(new URL(calls[0]!.url).searchParams.get('orderBy')).toBe('createdTime');
+  });
+
+  it.each([
+    ['an incomplete search', { files: [], incompleteSearch: true }],
+    ['no file list at all', {}],
+    ['a list that is not a list', { files: null }],
+  ])('treats %s as an error, never as "no plan yet"', async (_, json) => {
+    fakeDrive([[/.*/, () => ({ json })]]);
+    await expect(storage().listCalendars()).rejects.toBeInstanceOf(DriveError);
+  });
+
+  it('notices a plan file in the trash or gone, instead of writing into it', async () => {
+    fakeDrive([[/fields=version,trashed$/, () => ({ json: { version: '6', trashed: true } })]]);
+    await expect(storage().save('f1', new DocBuilder().doc, '6')).rejects.toEqual(new PlanFileGoneError('trashed'));
+    fakeDrive([[/fields=version,trashed$/, () => ({ status: 404, text: 'not found' })]]);
+    await expect(storage().version('f1')).rejects.toEqual(new PlanFileGoneError('missing'));
+  });
+
+  it('refuses an answer without a version instead of treating it as unchanged', async () => {
+    fakeDrive([[/fields=version,trashed$/, () => ({ json: {} })]]);
+    await expect(storage().save('f1', new DocBuilder().doc, '6')).rejects.toBeInstanceOf(DriveError);
   });
 
   it('turns 401 into AuthExpiredError, and passes through an error from the token getter', async () => {

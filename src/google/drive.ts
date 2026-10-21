@@ -6,13 +6,31 @@ const UPLOAD = 'https://www.googleapis.com/upload/drive/v3/files';
 export const PLAN_FILE_NAME = 'vacation-planner.json';
 /** Marks files this app created, so it finds them again (`drive.file` sees only those). */
 export const APP_PROPERTY = { key: 'app', value: 'vacation_planner' };
+/** A call that hasn't answered by then never will: give up, so the next save can run. */
+export const CALL_TIMEOUT_MS = 30_000;
 
+/**
+ * Drive answered with an error, or didn't answer. `status` 0 means no answer (network,
+ * timeout); `retryable` says whether trying again later can help.
+ */
 export class DriveError extends Error {
   constructor(
     readonly status: number,
     body: string,
   ) {
-    super(`Google Drive answered ${status}: ${body.slice(0, 200)}`);
+    super(status ? `Google Drive answered ${status}: ${body.slice(0, 200)}` : `Google Drive did not answer: ${body}`);
+  }
+
+  /** StorageFailure: whether trying again later can help. */
+  get retryable(): boolean {
+    return this.status === 0 || this.status === 408 || this.status === 429 || this.status >= 500;
+  }
+}
+
+/** The plan file is in the Drive trash (or gone): writing to it would save into the bin. */
+export class PlanFileGoneError extends Error {
+  constructor(readonly reason: 'trashed' | 'missing') {
+    super(reason === 'trashed' ? 'The plan file is in the Google Drive trash' : 'The plan file no longer exists in Google Drive');
   }
 }
 
@@ -22,29 +40,85 @@ export interface DriveFile {
 }
 
 async function call(token: string, url: string, init: RequestInit = {}): Promise<Response> {
-  const response = await fetch(url, { ...init, headers: { ...init.headers, Authorization: `Bearer ${token}` } });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...init,
+      headers: { ...init.headers, Authorization: `Bearer ${token}` },
+      // Versions and content must come from Drive itself, never from the HTTP cache: a cached
+      // version would make a stale write look safe. Redirects never come from Drive's API.
+      cache: 'no-store',
+      redirect: 'error',
+      signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+    });
+  } catch (e) {
+    throw new DriveError(0, e instanceof Error && e.name === 'TimeoutError' ? 'timeout' : 'network');
+  }
   if (response.status === 401) throw new AuthExpiredError();
-  if (!response.ok) throw new DriveError(response.status, await response.text());
+  if (!response.ok) throw new DriveError(response.status, await response.text().catch(() => ''));
   return response;
 }
 
-/** My plan files, newest first. Normally there is exactly one. */
-export async function findPlanFiles(token: string): Promise<DriveFile[]> {
-  const q = `appProperties has { key='${APP_PROPERTY.key}' and value='${APP_PROPERTY.value}' } and 'me' in owners and trashed=false`;
-  const url = `${FILES}?${new URLSearchParams({ q, spaces: 'drive', orderBy: 'modifiedTime desc', fields: 'files(id,version)' })}`;
-  const body = (await (await call(token, url)).json()) as { files?: DriveFile[] };
-  return body.files ?? [];
+async function json<T>(response: Response): Promise<T> {
+  try {
+    return (await response.json()) as T;
+  } catch {
+    throw new DriveError(502, 'an answer that is not JSON');
+  }
+}
+
+/** Drive versions are numbers sent as strings; anything else is a broken answer. */
+function versionOf(body: { version?: unknown }): string {
+  const v = body.version;
+  if ((typeof v === 'string' && /^\d+$/.test(v)) || (typeof v === 'number' && Number.isInteger(v))) return String(v);
+  throw new DriveError(502, 'an answer without a file version');
+}
+
+/**
+ * My plan files (`trashed`: the ones in the bin instead), oldest first, every page of the list.
+ * An incomplete list is an error, never "no plan": the app would create an empty one over it.
+ */
+export async function findPlanFiles(token: string, trashed = false): Promise<DriveFile[]> {
+  const q = `appProperties has { key='${APP_PROPERTY.key}' and value='${APP_PROPERTY.value}' } and 'me' in owners and trashed=${trashed}`;
+  const out: DriveFile[] = [];
+  let pageToken: string | undefined;
+  do {
+    const params = new URLSearchParams({
+      q,
+      spaces: 'drive',
+      orderBy: 'createdTime',
+      fields: 'nextPageToken,incompleteSearch,files(id,version,ownedByMe)',
+      ...(pageToken && { pageToken }),
+    });
+    const body = await json<{ files?: unknown; nextPageToken?: unknown; incompleteSearch?: unknown }>(
+      await call(token, `${FILES}?${params}`),
+    );
+    if (!Array.isArray(body.files) || body.incompleteSearch === true) throw new DriveError(502, 'an incomplete list of files');
+    for (const f of body.files as { id?: unknown; version?: unknown; ownedByMe?: unknown }[]) {
+      if (typeof f.id === 'string' && f.ownedByMe !== false) out.push({ id: f.id, version: versionOf(f) });
+    }
+    pageToken = typeof body.nextPageToken === 'string' && body.nextPageToken ? body.nextPageToken : undefined;
+  } while (pageToken);
+  return out;
 }
 
 export async function getVersion(token: string, id: string): Promise<string> {
-  const body = (await (await call(token, `${FILES}/${encodeURIComponent(id)}?fields=version`)).json()) as { version: string };
-  return body.version;
+  let response: Response;
+  try {
+    response = await call(token, `${FILES}/${encodeURIComponent(id)}?fields=version,trashed`);
+  } catch (e) {
+    if (e instanceof DriveError && e.status === 404) throw new PlanFileGoneError('missing');
+    throw e;
+  }
+  const body = await json<{ version?: unknown; trashed?: unknown }>(response);
+  if (body.trashed === true) throw new PlanFileGoneError('trashed');
+  return versionOf(body);
 }
 
 /** Version first, then content: if the file changes in between, the next save sees a conflict and merges. */
 export async function readPlanFile(token: string, id: string): Promise<{ raw: unknown; version: string }> {
   const version = await getVersion(token, id);
-  const raw: unknown = await (await call(token, `${FILES}/${encodeURIComponent(id)}?alt=media`)).json();
+  const raw: unknown = await json(await call(token, `${FILES}/${encodeURIComponent(id)}?alt=media`));
   return { raw, version };
 }
 
@@ -63,7 +137,9 @@ export async function createPlanFile(token: string, content: unknown): Promise<D
     headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
     body,
   });
-  return (await response.json()) as DriveFile;
+  const file = await json<{ id?: unknown; version?: unknown }>(response);
+  if (typeof file.id !== 'string') throw new DriveError(502, 'an answer without a file id');
+  return { id: file.id, version: versionOf(file) };
 }
 
 /** Replaces the content; returns the new version. */
@@ -73,5 +149,14 @@ export async function writePlanFile(token: string, id: string, content: unknown)
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(content),
   });
-  return ((await response.json()) as { version: string }).version;
+  return versionOf(await json(response));
+}
+
+/** Moves a file to the Drive trash (recoverable for 30 days). */
+export async function trashPlanFile(token: string, id: string): Promise<void> {
+  await call(token, `${FILES}/${encodeURIComponent(id)}?fields=id`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ trashed: true }),
+  });
 }
