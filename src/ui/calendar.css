@@ -52,19 +52,24 @@
 
 /* Day kinds and fills (CAL-4, CAL-6); also used by the legend swatches. */
 .base-weekend {
-  background: var(--weekend);
+  background-color: var(--weekend);
 }
 
 .base-holiday {
-  background: var(--holiday);
+  background-color: var(--holiday);
 }
 
 .fill-planned {
-  background: color-mix(in srgb, var(--c) 35%, var(--surface));
+  background-color: color-mix(in srgb, var(--c) var(--fill-planned), var(--surface));
 }
 
 .fill-approved {
-  background: color-mix(in srgb, var(--c) 80%, var(--surface));
+  background-color: color-mix(in srgb, var(--c) var(--fill-approved), var(--surface));
+}
+
+/* Ideas only: a light hatch, so they read as "not decided" without relying on colour. */
+.idea-only {
+  background-image: repeating-linear-gradient(135deg, color-mix(in srgb, var(--c) 22%, transparent) 0 3px, transparent 3px 8px);
 }
 
 .day {
@@ -80,10 +85,27 @@
 }
 
 .day:not(.base-weekend, .base-holiday, .fill-planned, .fill-approved) {
-  background: var(--surface);
+  background-color: var(--surface);
 }
 
 .day.base-holiday .num {
+  font-weight: 700;
+}
+
+/* Holiday marker: a dot under the number, a cue that isn't colour (CAL-4). */
+.day.base-holiday::before {
+  content: '';
+  position: absolute;
+  bottom: 5px;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  margin-left: -2.5px;
+  border-radius: 50%;
+  background: var(--holiday-mark);
+}
+
+.day.fill-approved .num {
   font-weight: 700;
 }
 
@@ -94,13 +116,21 @@
   text-align: center;
 }
 
-.day.out-of-year .num {
+.day.past .num {
+  opacity: 0.6;
+}
+
+.day.out-of-year {
   opacity: 0.55;
 }
 
 .day.today .num {
   border-radius: 999px;
-  box-shadow: 0 0 0 2px var(--accent);
+  padding: 0.05em 0.35em;
+  background: var(--today-bg);
+  color: var(--today-fg);
+  font-weight: 700;
+  opacity: 1;
 }
 
 .day.selected::after {
@@ -117,19 +147,20 @@
 }
 
 /* Stepped month separator (CAL-3). */
+/* Neutral and plain, so it never looks like a leave outline. */
 .day.m-top {
-  border-top: 3px double var(--month-line);
+  border-top: 2px solid var(--month-line);
 }
 
 .day.m-left {
-  border-left: 3px double var(--month-line);
+  border-left: 2px solid var(--month-line);
 }
 
 /* Block outlines: one layer per block, edges only where the block ends (CAL-6). */
 .outline {
   position: absolute;
   inset: calc(var(--i, 0) * 3px);
-  border: 0 solid color-mix(in srgb, var(--c) 65%, var(--fg));
+  border: 0 solid color-mix(in srgb, var(--c) 85%, var(--fg));
   pointer-events: none;
 }
 

@@ -149,7 +149,11 @@ export function Calendar({ year, doc, personId, today, onCreate, onOpen }: Props
   };
 
   const [selStart, selEnd] = selection ? orderRange(selection.anchor, selection.focus) : ['', ''];
-  const typeColor = (b: Block) => doc.leaveTypes[b.typeId]?.color ?? '#999';
+  // Built-in types take their colour from the scheme (theme.css); custom types keep their own.
+  const typeColor = (b: Block) => {
+    const lt = doc.leaveTypes[b.typeId];
+    return lt?.key ? `var(--leave-${lt.key})` : (lt?.color ?? 'var(--muted)');
+  };
 
   return (
     <section className="calendar-wrap">
@@ -200,6 +204,8 @@ export function Calendar({ year, doc, personId, today, onCreate, onOpen }: Props
                 `base-${info.base}`,
                 yearOf(d) !== year && 'out-of-year',
                 d === today && 'today',
+                d < today && 'past',
+                !firm && info.blocks.length > 0 && 'idea-only',
                 selected && 'selected',
                 firm && `fill-${firm.status}`,
                 me.top && 'm-top',
@@ -213,7 +219,7 @@ export function Calendar({ year, doc, personId, today, onCreate, onOpen }: Props
                   role="gridcell"
                   data-date={d}
                   className={classes.filter(Boolean).join(' ')}
-                  style={firm ? ({ '--c': typeColor(firm) } as CSSProperties) : undefined}
+                  style={info.blocks[0] ? ({ '--c': typeColor(firm ?? info.blocks[0]) } as CSSProperties) : undefined}
                   tabIndex={d === focusDate ? 0 : -1}
                   aria-selected={selected}
                   aria-label={describe}

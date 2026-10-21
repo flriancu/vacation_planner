@@ -9,6 +9,16 @@
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='5' width='26' height='24' rx='4' fill='%23e05a9a'/%3E%3Crect x='3' y='5' width='26' height='7' rx='3' fill='%23a3155b'/%3E%3Ccircle cx='16' cy='21' r='4' fill='%23fff'/%3E%3C/svg%3E"
     />
     <title>Planificator de concediu</title>
+    <script>
+      // Colour scheme and mode before first paint, so there is no flash (ui/theme.ts keeps them in sync).
+      try {
+        const s = localStorage.getItem('vacation-planner.scheme') || 'roz';
+        let m = localStorage.getItem('vacation-planner.mode') || 'auto';
+        if (m === 'auto') m = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.dataset.scheme = s;
+        document.documentElement.dataset.mode = m;
+      } catch {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

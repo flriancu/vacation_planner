@@ -7,6 +7,7 @@ import type { Storage } from '../storage/Storage';
 import { BlockEditor, type Draft, type EditorTarget } from './BlockEditor';
 import { Calendar } from './Calendar';
 import { Legend } from './Legend';
+import { SCHEMES, useTheme, type Mode } from './theme';
 import { useDocument, type SaveState } from './useDocument';
 import './app.css';
 
@@ -85,6 +86,7 @@ interface PlannerProps {
 
 function Planner({ doc, update, saveState, demo }: PlannerProps) {
   const { t, lang, setLang } = useI18n();
+  const { scheme, setScheme, mode, setMode } = useTheme();
   const [today] = useState(localToday);
   const [year, setYear] = useState(() => yearOf(today));
   const [editor, setEditor] = useState<EditorTarget | null>(null);
@@ -151,6 +153,26 @@ function Planner({ doc, update, saveState, demo }: PlannerProps) {
           </button>
         </nav>
         <output className={`save-state save-${demo ? 'demo' : saveState}`}>{demo ? t('app.demo') : t(`save.${saveState}`)}</output>
+        <label className="picker">
+          <span>{t('theme.scheme')}</span>
+          <select value={scheme} onChange={(e) => setScheme(e.target.value as (typeof SCHEMES)[number])}>
+            {SCHEMES.map((s) => (
+              <option key={s} value={s}>
+                {t(`theme.${s}`)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="picker">
+          <span>{t('theme.mode')}</span>
+          <select value={mode} onChange={(e) => setMode(e.target.value as Mode)}>
+            {(['auto', 'light', 'dark'] as const).map((m) => (
+              <option key={m} value={m}>
+                {t(`mode.${m}`)}
+              </option>
+            ))}
+          </select>
+        </label>
         <button type="button" className="lang" onClick={() => setLang(lang === 'ro' ? 'en' : 'ro')} aria-label={t('lang.otherLabel')}>
           {t('lang.other')}
         </button>
