@@ -33,6 +33,8 @@ interface Selection {
   focus: ISODate;
 }
 
+const FREE_TYPES: ReadonlySet<string> = new Set(['swap', 'closed']);
+
 const STEPS: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
 
 /**
@@ -149,11 +151,10 @@ export function Calendar({ year, doc, personId, today, onCreate, onOpen }: Props
   };
 
   const [selStart, selEnd] = selection ? orderRange(selection.anchor, selection.focus) : ['', ''];
-  // Built-in types take their colour from the scheme (theme.css); custom types keep their own.
-  const typeColor = (b: Block) => {
-    const lt = doc.leaveTypes[b.typeId];
-    return lt?.key ? `var(--leave-${lt.key})` : (lt?.color ?? 'var(--muted)');
-  };
+  // A day off is a day off: one accent for all leave; swap and office-closed days look like
+  // any other day off anyway, with a neutral outline (theme.css).
+  const isFree = (b: Block) => FREE_TYPES.has(doc.leaveTypes[b.typeId]?.key ?? '');
+  const typeColor = (b: Block) => (isFree(b) ? 'var(--muted)' : 'var(--leave)');
 
   return (
     <section className="calendar-wrap">
@@ -205,9 +206,9 @@ export function Calendar({ year, doc, personId, today, onCreate, onOpen }: Props
                 yearOf(d) !== year && 'out-of-year',
                 d === today && 'today',
                 d < today && 'past',
-                !firm && info.blocks.length > 0 && 'idea-only',
+                !firm && info.blocks.some((b) => !isFree(b)) && 'idea-only',
                 selected && 'selected',
-                firm && `fill-${firm.status}`,
+                firm && (isFree(firm) ? 'free-block' : `fill-${firm.status}`),
                 me.top && 'm-top',
                 me.left && 'm-left',
               ];

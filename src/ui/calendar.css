@@ -51,25 +51,25 @@
 }
 
 /* Day kinds and fills (CAL-4, CAL-6); also used by the legend swatches. */
-.base-weekend {
-  background-color: var(--weekend);
-}
-
-.base-holiday {
-  background-color: var(--holiday);
+.base-weekend,
+.base-holiday,
+.free-block {
+  background-color: var(--free);
 }
 
 .fill-planned {
-  background-color: color-mix(in srgb, var(--c) var(--fill-planned), var(--surface));
+  background-color: color-mix(in srgb, var(--leave) var(--fill-planned), var(--surface));
 }
 
 .fill-approved {
-  background-color: color-mix(in srgb, var(--c) var(--fill-approved), var(--surface));
+  background-color: var(--leave);
 }
 
-/* Ideas only: a light hatch, so they read as "not decided" without relying on colour. */
+/* Ideas only: sparse, low-contrast dots plus the dashed outline. Not stripes: high-contrast
+   stripes can cause pattern glare, and Google Calendar uses stripes for "declined". */
 .idea-only {
-  background-image: repeating-linear-gradient(135deg, color-mix(in srgb, var(--c) 22%, transparent) 0 3px, transparent 3px 8px);
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--c) 45%, transparent) 1.3px, transparent 1.8px);
+  background-size: 8px 8px;
 }
 
 .day {
@@ -84,7 +84,7 @@
   outline: none;
 }
 
-.day:not(.base-weekend, .base-holiday, .fill-planned, .fill-approved) {
+.day:not(.base-weekend, .base-holiday, .free-block, .fill-planned, .fill-approved) {
   background-color: var(--surface);
 }
 
@@ -105,10 +105,6 @@
   background: var(--holiday-mark);
 }
 
-.day.fill-approved .num {
-  font-weight: 700;
-}
-
 .day .num {
   position: relative;
   z-index: 1;
@@ -116,12 +112,20 @@
   text-align: center;
 }
 
+/* Past and out-of-year days mute only the number: fading the whole cell would read as
+   "less certain", which is how ideas are drawn. */
 .day.past .num {
-  opacity: 0.6;
+  color: var(--muted);
 }
 
-.day.out-of-year {
-  opacity: 0.55;
+.day.out-of-year .num {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.day.fill-approved .num {
+  font-weight: 700;
+  color: var(--leave-fg);
 }
 
 .day.today .num {

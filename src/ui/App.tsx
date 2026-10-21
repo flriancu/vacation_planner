@@ -179,7 +179,7 @@ function Planner({ doc, update, saveState, demo }: PlannerProps) {
       </header>
 
       <main>
-        <Legend doc={doc} />
+        <Legend />
         <Calendar
           key={year}
           year={year}

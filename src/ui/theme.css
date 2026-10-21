@@ -2,9 +2,10 @@
  * Colour schemes (CAL-4). <html data-scheme="roz|neutru|contrast" data-mode="light|dark">;
  * index.html sets both before first paint, ui/theme.ts keeps them in sync.
  *
- * Principle: days you get (weekend, holiday, swap, office closed) stay in the scheme's
- * calm base tint; leave you take gets a distinct hue per type; status is shown by fill
- * strength and line style, never by colour alone.
+ * Two colours per scheme: one tint for days off anyway (weekend, holiday, swap, office
+ * closed) and one accent for all leave you take, whatever its type. What matters is the
+ * status: idea = hatch + dashed outline, planned = light fill + outline, approved = full
+ * accent + thick outline. Holidays also get a dot.
  */
 
 :root {
@@ -36,22 +37,14 @@
   --selected: rgb(31 95 209 / 0.18);
   --danger: #b3261e;
   --warning: #7a4d00;
-  --weekend: #fff0f6;
-  --holiday: #ffc9e0;
+  --free: #ffe4f0;
   --holiday-mark: #c2185b;
   --month-line: #8a7f86;
   --today-bg: #b0185a;
   --today-fg: #ffffff;
-  --leave-annual: #6d4aff;
-  --leave-floating: #0f9d8a;
-  --leave-excused: #e07b00;
-  --leave-swap: #e0478f;
-  --leave-closed: #c0397a;
-  --leave-special: #2f6fde;
-  --leave-sick: #5b8bb5;
-  --leave-unpaid: #7a7a7a;
-  --fill-planned: 24%;
-  --fill-approved: 55%;
+  --leave: #00796b;
+  --leave-fg: #ffffff;
+  --fill-planned: 22%;
 }
 
 :root[data-scheme='roz'][data-mode='dark'] {
@@ -66,22 +59,14 @@
   --selected: rgb(138 184 255 / 0.25);
   --danger: #ff8a80;
   --warning: #f5c46b;
-  --weekend: #2a1b24;
-  --holiday: #4d2539;
+  --free: #3a2330;
   --holiday-mark: #ff8fc0;
   --month-line: #8f8189;
   --today-bg: #f27ab2;
   --today-fg: #1a0d14;
-  --leave-annual: #9d85ff;
-  --leave-floating: #3cc7b2;
-  --leave-excused: #ffa94d;
-  --leave-swap: #ff79b3;
-  --leave-closed: #e76aa5;
-  --leave-special: #6fa0ff;
-  --leave-sick: #8fb6d8;
-  --leave-unpaid: #a0a0a0;
+  --leave: #4db6ac;
+  --leave-fg: #0b1f1d;
   --fill-planned: 30%;
-  --fill-approved: 55%;
 }
 
 /* ---- Neutru: greys for the calendar, colour only for leave ---- */
@@ -97,22 +82,14 @@
   --selected: rgb(37 99 235 / 0.16);
   --danger: #b91c1c;
   --warning: #92400e;
-  --weekend: #f1f1f4;
-  --holiday: #dcdce3;
+  --free: #ececf0;
   --holiday-mark: #1c1c1e;
   --month-line: #9a9aa3;
   --today-bg: #2563eb;
   --today-fg: #ffffff;
-  --leave-annual: #2563eb;
-  --leave-floating: #0d9488;
-  --leave-excused: #d97706;
-  --leave-swap: #9333ea;
-  --leave-closed: #64748b;
-  --leave-special: #db2777;
-  --leave-sick: #0891b2;
-  --leave-unpaid: #737373;
-  --fill-planned: 22%;
-  --fill-approved: 50%;
+  --leave: #2563eb;
+  --leave-fg: #ffffff;
+  --fill-planned: 20%;
 }
 
 :root[data-scheme='neutru'][data-mode='dark'] {
@@ -127,22 +104,14 @@
   --selected: rgb(96 165 250 / 0.25);
   --danger: #f87171;
   --warning: #fbbf24;
-  --weekend: #202026;
-  --holiday: #34343d;
+  --free: #2a2a31;
   --holiday-mark: #ececf1;
   --month-line: #6b6b75;
   --today-bg: #60a5fa;
   --today-fg: #0b1220;
-  --leave-annual: #60a5fa;
-  --leave-floating: #2dd4bf;
-  --leave-excused: #fbbf24;
-  --leave-swap: #c084fc;
-  --leave-closed: #94a3b8;
-  --leave-special: #f472b6;
-  --leave-sick: #22d3ee;
-  --leave-unpaid: #a3a3a3;
+  --leave: #60a5fa;
+  --leave-fg: #0b1220;
   --fill-planned: 28%;
-  --fill-approved: 50%;
 }
 
 /* ---- Contrast: black/white structure, Okabe–Ito hues (colour-blind safe), heavy lines ---- */
@@ -158,22 +127,14 @@
   --selected: rgb(0 80 160 / 0.2);
   --danger: #b00000;
   --warning: #6b4500;
-  --weekend: #e8e8e8;
-  --holiday: #c8c8c8;
+  --free: #d6d6d6;
   --holiday-mark: #000000;
   --month-line: #000000;
   --today-bg: #000000;
   --today-fg: #ffffff;
-  --leave-annual: #0072b2;
-  --leave-floating: #009e73;
-  --leave-excused: #e69f00;
-  --leave-swap: #cc79a7;
-  --leave-closed: #555555;
-  --leave-special: #d55e00;
-  --leave-sick: #56b4e9;
-  --leave-unpaid: #000000;
-  --fill-planned: 30%;
-  --fill-approved: 60%;
+  --leave: #0050a0;
+  --leave-fg: #ffffff;
+  --fill-planned: 25%;
 }
 
 :root[data-scheme='contrast'][data-mode='dark'] {
@@ -188,22 +149,14 @@
   --selected: rgb(108 182 255 / 0.3);
   --danger: #ff6b6b;
   --warning: #ffd400;
-  --weekend: #1e1e1e;
-  --holiday: #3a3a3a;
+  --free: #3a3a3a;
   --holiday-mark: #ffffff;
   --month-line: #ffffff;
   --today-bg: #ffffff;
   --today-fg: #000000;
-  --leave-annual: #56b4e9;
-  --leave-floating: #2fd6a0;
-  --leave-excused: #ffb000;
-  --leave-swap: #ff8fd0;
-  --leave-closed: #bbbbbb;
-  --leave-special: #ff7a33;
-  --leave-sick: #9ad8ff;
-  --leave-unpaid: #ffffff;
+  --leave: #6cb6ff;
+  --leave-fg: #000000;
   --fill-planned: 35%;
-  --fill-approved: 60%;
 }
 
 * {

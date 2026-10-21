@@ -41,13 +41,14 @@ Priority: **M** = must (v1), **S** = should (v1 if cheap), **v2** = phase 2.
 | CAL-1 | M | Show the calendar as one continuous list of weeks, Monday to Sunday, with no break between months, like the spreadsheet. |
 | CAL-2 | M | Default range: the selected year plus the weeks that overlap the previous December and the following January, so the Christmas–Epiphany break is visible in full. A year switcher moves between years. |
 | CAL-3 | M | Separate months with a stepped line that follows the real first day of each month. Show the month name beside the weeks it covers. |
-| CAL-4 | M | Colour each day by type: weekend, public holiday, office-closed day, and each leave type. Use the spreadsheet's pink palette as the default theme. |
+| CAL-4 | M | Two colours only: one tint for days off anyway (weekend, public holiday, office closed, swap day) and one accent for all my leave, whatever its type. The kind of leave is shown in the editor and tooltip, not by colour. Holidays also get a dot under the number. |
 | CAL-5 | M | A notes column beside each week shows the holiday names in that week (e.g. "Paște", "Rusalii", "Sf. Maria"). |
-| CAL-6 | M | Draw leave blocks as one outline around the whole range, even when it crosses weeks. `idea` = outline only; `planned` = outline plus a light fill; `approved` = solid fill and a thicker outline. Colour must never be the only signal: also use line style or thickness. |
+| CAL-6 | M | Status matters most and is drawn as a lightness ramp, with line style as a second cue: `idea` = sparse dots + dashed outline; `planned` = light fill + solid outline; `approved` = the full accent + thick outline + bold number. Each leave block is one outline, even across weeks. Past and out-of-year days mute only the number, never the fill. Contrast meets WCAG 1.4.11 (≥ 3:1 for outlines and fills against neighbouring cells) and 1.4.3 (≥ 4.5:1 for numbers) in every scheme. |
 | CAL-7 | M | Say in plain words what a block costs and what it gives, with full dates and no abbreviations, e.g. "Folosești 1 zi de concediu → ești liber 5 zile la rând: vineri 27 noiembrie – marți 1 decembrie". Shown in the editor and as the tooltip of the block's days; nothing is written on the calendar itself. |
 | CAL-8 | M | Create a block by selecting a date range (drag on desktop, tap start and tap end on phone), then choose its type and status. |
 | CAL-9 | M | Tapping or clicking a block opens it to edit dates, type, status and note, or to delete it. |
 | CAL-10 | S | Show today's date. |
+| CAL-11 | M | Switchable colour schemes (Roz, Neutru, Contrast ridicat), each with light and dark variants, plus Automatic / Light / Dark. Remembered in the browser and applied before first paint. |
 
 ### 4.2 Day types and holiday data (DAY)
 

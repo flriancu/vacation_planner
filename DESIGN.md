@@ -260,7 +260,15 @@ The floating and excused balances use the same formulas with their quotas and no
   - on phone, the month name and the notes column fold into their own lines above and below the week.
 - **Selecting days (CAL-8):** pointer events (drag) on desktop; tap start, tap end on touch; Shift+arrow keys on keyboard (NF-6).
 - **Layout:** desktop = calendar + a right sidebar (Balance, Swap reminders, Suggestions); phone = calendar + a bottom sheet with the same three tabs.
-- **Patterns for status (CAL-6):** `idea` = dashed outline; `planned` = solid 2 px outline + 35 % fill; `approved` = 80 % fill + 3 px outline.
+- **Visual encoding (CAL-4, CAL-6, CAL-11)**, checked against research (sources in the commit that introduced it):
+  - *Status is ordered* (idea < planned < approved), so it is a **lightness ramp**: dots → light fill → full accent. Lightness/value is the channel for ordered data (Bertin; Munzner's magnitude channels; ColorBrewer sequential schemes), and "lighter = less certain" was among the most intuitive cues in MacEachren et al. 2012. Hue is used only to separate "my leave" from "off anyway", never for order.
+  - *Line style is the redundant cue*: dashed (idea) / solid (planned) / thick solid (approved). Dashing was the preferred uncertainty cue for lines (Boukhelifa et al. 2012) and gives a non-colour signal (WCAG 1.4.1).
+  - *Ideas use sparse, low-contrast dots, not stripes*: high-contrast stripes near 3 cycles/degree cause pattern glare (Monger et al. 2015), and Google Calendar uses stripes for "declined" (Outlook uses hatching for "tentative").
+  - *Two colours per scheme* (one tint, one accent): well under the 5–7 hues people track reliably (Healey 1996). The leave type lives in words (editor, tooltip).
+  - *Past and out-of-year days mute only the number*: fading the cell would read as "less certain".
+  - *Grid and month lines are muted, neutral* (Few: grid "just visible enough"); today is the only filled circle; holidays get a small dot lower in the cell.
+  - *Contrast*: a script computes WCAG ratios for every scheme × mode (outlines ≥ 3:1 against plain and "off anyway" cells, numbers ≥ 4.5:1). The planned fill alone is ~1.4:1 by design; its solid outline carries the difference, as 1.4.11 allows.
+  - *Schemes*: `<html data-scheme data-mode>`; tokens `--free`, `--leave`, `--leave-fg`, `--fill-planned` per scheme × mode in `theme.css`; `index.html` applies them before first paint.
 - **Block description (CAL-7):** `ui/describe.ts` turns a block's cost and break into one sentence (plural forms from `i18n/plurals.ts`: "1 zi", "2 zile", "20 de zile"), worded by the budget it draws from; types that spend nothing only say how long the break is. Used by the editor and as the days' `title`.
 
 ## 8. Testing
