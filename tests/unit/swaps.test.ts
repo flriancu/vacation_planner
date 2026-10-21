@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { swapReminders } from '../../src/domain/swaps';
+import { swapHolidaysFor, swapReminders } from '../../src/domain/swaps';
 import { DocBuilder } from '../fixtures/builder';
 import { demo2027 } from '../fixtures/demo2027';
 
@@ -44,5 +44,23 @@ describe('swapReminders (DAY-4)', () => {
     const jan24 = swapReminders(b.doc, b.personId, 2027).find((r) => r.holiday.date === '2027-01-24')!;
     expect(jan24.open).toBe(true);
     expect(jan24.options).toEqual(['2027-01-22', '2027-01-25']);
+  });
+});
+
+describe('swapHolidaysFor (DAY-4)', () => {
+  const doc = new DocBuilder().doc;
+  const dates = (d: string) => swapHolidaysFor(doc, d).map((h) => h.date);
+
+  it('is the Friday before or the Monday after a weekend with a holiday', () => {
+    expect(dates('2027-08-16')).toEqual(['2027-08-15']); // Mon after Sun 15 Aug
+    expect(dates('2027-12-24')).toEqual(['2027-12-25', '2027-12-26']); // Fri before Sat 25 / Sun 26 Dec
+    expect(dates('2027-12-31')).toEqual(['2028-01-01', '2028-01-02']); // across the year
+  });
+
+  it('is nothing on any other day', () => {
+    expect(dates('2027-08-17')).toEqual([]); // a Tuesday
+    expect(dates('2027-08-20')).toEqual([]); // the Friday before a weekend without a holiday
+    expect(dates('2027-01-01')).toEqual([]); // a Friday that is itself a holiday
+    expect(dates('2027-08-15')).toEqual([]); // the weekend holiday itself
   });
 });

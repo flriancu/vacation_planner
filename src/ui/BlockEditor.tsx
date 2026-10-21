@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type SyntheticEvent } from 'react';
 import { blockStats } from '../domain/blocks';
-import { blockBudget, buildDays, findOverlaps } from '../domain/calendar';
+import { blockBudget, buildDays, findOverlaps, fullOfIdeas, MAX_IDEAS_PER_DAY } from '../domain/calendar';
 import { addDays, overlaps, yearOf, type ISODate } from '../domain/dates';
 import { updateRecord } from '../domain/edit';
 import { addRecord, live, STATUS_RANK, typeByKey, type Block, type BlockStatus, type PlanDoc } from '../domain/schema';
-import { swapReminders, type SwapReminder } from '../domain/swaps';
+import { swapHolidaysFor } from '../domain/swaps';
 import { useI18n } from '../i18n';
 import { describeBlock } from './describe';
 import { DateRangeFields } from './DateRangeFields';
@@ -45,15 +45,6 @@ function initialDraft(target: EditorTarget, doc: PlanDoc): Draft {
 
 const sameDraft = (a: Draft, b: Draft) =>
   a.typeId === b.typeId && a.status === b.status && a.start === b.start && a.end === b.end && a.note === b.note && a.swapFor === b.swapFor;
-
-/**
- * Weekend holidays a swap day around `date` can stand for (DAY-4). A holiday on 1 January
- * can be made up on 31 December of the year before, so the neighbouring years count too.
- */
-function nearbyReminders(doc: PlanDoc, personId: string, date: ISODate): SwapReminder[] {
-  const y = yearOf(date);
-  return [y - 1, y, y + 1].flatMap((year) => swapReminders(doc, personId, year));
-}
 
 /** Create or edit one block: type, status, dates, note (CAL-8, CAL-9, BLK-*). */
 export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch, onClose }: Props) {
@@ -103,13 +94,23 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
 
   // BLK-5: planned and approved leave can't overlap other planned or approved leave; ideas can.
   const blocked = !!preview?.overlap && draft.status !== 'idea';
+  // ...and no day holds more than MAX_IDEAS_PER_DAY ideas.
+  const crowded = draft.status === 'idea' && valid ? fullOfIdeas(doc, personId, draft.start, draft.end, original?.id) : [];
 
-  // The holidays this swap day can stand for: still open, or already the one this block stands for.
-  const ownId = original?.id;
-  const reminders =
-    type.key === 'swap' && valid
-      ? nearbyReminders(doc, personId, draft.start).filter((r) => r.open || (r.resolvedBy && r.resolvedBy.id === ownId))
-      : [];
+  // DAY-4: a swap day is one working day, the Friday just before or the Monday just after a
+  // weekend with a legal holiday; it stands for that holiday. The one chosen, else the first that
+  // no other swap day stands for yet.
+  const swapHolidays = type.key === 'swap' && valid && draft.start === draft.end ? swapHolidaysFor(doc, draft.start) : [];
+  const misplacedSwap = type.key === 'swap' && valid && swapHolidays.length === 0;
+  const taken = new Set(
+    live(doc.blocks)
+      .filter((b) => b.personId === personId && b.id !== original?.id && b.status !== 'idea' && b.swapFor)
+      .map((b) => b.swapFor),
+  );
+  const swapFor = swapHolidays.some((h) => h.date === draft.swapFor)
+    ? draft.swapFor
+    : (swapHolidays.find((h) => !taken.has(h.date)) ?? swapHolidays[0])?.date;
+  const cannotSave = !valid || blocked || crowded.length > 0 || misplacedSwap;
   const alsoHere =
     original && valid
       ? live(doc.blocks).filter((b) => b.personId === personId && b.id !== original.id && overlaps(b.start, b.end, draft.start, draft.end))
@@ -127,20 +128,13 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
       status = 'approved';
       setDemoted(false);
     }
-    const swapFor =
-      next.key === 'swap'
-        ? (draft.swapFor ??
-          nearbyReminders(doc, personId, draft.start).find((r) => r.open && r.options.includes(draft.start))?.holiday.date)
-        : undefined;
-    setDraft((d) => ({ ...d, typeId, status, ...(swapFor ? { swapFor } : { swapFor: undefined }) }));
+    setDraft((d) => ({ ...d, typeId, status, ...(next.key !== 'swap' && { swapFor: undefined }) }));
   };
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (!valid || blocked) return;
-    // A holiday no longer on offer (the dates moved away from it) is not kept out of sight.
-    const swapFor = type.key === 'swap' && reminders.some((r) => r.holiday.date === draft.swapFor) ? draft.swapFor : undefined;
-    onSave({ ...draft, swapFor });
+    if (cannotSave) return;
+    onSave({ ...draft, swapFor: type.key === 'swap' ? swapFor : undefined });
   };
 
   /** Leaves the editor through `then`, asking first if there are unsaved changes. */
@@ -213,12 +207,11 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
         {type.key === 'swap' && (
           <label>
             {t('editor.swapFor')}
-            <select value={draft.swapFor ?? ''} onChange={(e) => set({ swapFor: e.target.value || undefined })}>
-              <option value="">{t('editor.swapNone')}</option>
-              {reminders.map((r) => (
-                <option key={r.holiday.date} value={r.holiday.date}>
-                  {fmt(r.holiday.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} —{' '}
-                  {r.holiday.names.map(name).join(' · ')}
+            <select value={swapFor ?? ''} onChange={(e) => set({ swapFor: e.target.value })} disabled={swapHolidays.length === 0}>
+              {swapHolidays.length === 0 && <option value="">{t('editor.swapNone')}</option>}
+              {swapHolidays.map((h) => (
+                <option key={h.date} value={h.date}>
+                  {fmt(h.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} — {h.names.map(name).join(' · ')}
                 </option>
               ))}
             </select>
@@ -238,6 +231,15 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
             </span>
           )}
           {blocked && <span className="warning">{t('editor.overlap')}</span>}
+          {misplacedSwap && <span className="warning">{t('editor.swapAdjacent')}</span>}
+          {crowded.length > 0 && (
+            <span className="warning">
+              {t('editor.tooManyIdeas', {
+                max: MAX_IDEAS_PER_DAY,
+                date: fmt(crowded[0]!, { weekday: 'long', day: 'numeric', month: 'long' }),
+              })}
+            </span>
+          )}
           {original?.status === 'approved' && datesChanged && <span className="warning">{t('editor.warnApprovedDates')}</span>}
         </p>
 
@@ -279,7 +281,7 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
             <button type="button" onClick={() => leave(close)}>
               {t('editor.cancel')}
             </button>
-            <button type="submit" className="primary" disabled={!valid || blocked}>
+            <button type="submit" className="primary" disabled={cannotSave}>
               {t('editor.save')}
             </button>
           </div>

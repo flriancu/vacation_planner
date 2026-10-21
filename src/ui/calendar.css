@@ -137,11 +137,6 @@
   background: var(--holiday-mark);
 }
 
-/* On the approved fill the holiday colour all but vanishes (about 1.1:1): use the fill's text colour. */
-.day.base-holiday.fill-approved::before {
-  background: var(--leave-fg);
-}
-
 .day .num {
   position: relative;
   z-index: 1;
@@ -282,9 +277,5 @@
   }
   .fill-planned {
     background-image: repeating-linear-gradient(45deg, transparent 0 4px, Canvas 4px 6px);
-  }
-  .day.base-holiday.fill-approved::before,
-  .day.base-holiday.fill-planned::before {
-    background: HighlightText;
   }
 }

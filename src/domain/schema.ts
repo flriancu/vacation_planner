@@ -23,10 +23,10 @@ export interface Person extends Meta {
   hasAccount: boolean;
 }
 
-export type LeaveTypeKey = 'annual' | 'floating' | 'excused' | 'swap' | 'closed' | 'special' | 'sick' | 'unpaid';
-export type Budget = 'annual' | 'floating' | 'excused' | 'none';
+export type LeaveTypeKey = 'annual' | 'excused' | 'swap' | 'closed' | 'special' | 'sick' | 'unpaid';
+export type Budget = 'annual' | 'excused' | 'none';
 /** Budgets with a per-year quota that expires on 31 Dec (LT-6). */
-export type ExpiringBudget = 'floating' | 'excused';
+export type ExpiringBudget = 'excused';
 
 export interface LeaveType extends Meta {
   /** Set on built-in types only. */
@@ -63,7 +63,6 @@ export interface YearSettings extends Meta {
   personId: string;
   year: number;
   annualOpening: number;
-  floatingQuota: number;
   excusedQuota: number;
   closedCountsAgainstAnnual: boolean;
 }
@@ -141,7 +140,6 @@ export const STATUS_RANK: Record<BlockStatus, number> = { idea: 0, planned: 1, a
 /** Built-in leave types (LT-1, LT-2). Colours follow the old spreadsheet where it had one. */
 export const BUILTIN_TYPES: readonly Omit<LeaveType, keyof Meta>[] = [
   { key: 'annual', name: { ro: 'Concediu de odihnă', en: 'Annual leave' }, color: '#e05a9a', budget: 'annual', needsApproval: true },
-  { key: 'floating', name: { ro: 'Zi flotantă', en: 'Floating day' }, color: '#ffbdda', budget: 'floating', needsApproval: false },
   { key: 'excused', name: { ro: 'Învoire', en: 'Excused leave' }, color: '#f7c6dc', budget: 'excused', needsApproval: true },
   { key: 'swap', name: { ro: 'Zi compensatorie', en: 'Swap day' }, color: '#ff96c4', budget: 'none', needsApproval: true },
   {

@@ -151,3 +151,26 @@ describe('the edges of the supported years', () => {
     expect(swapReminders(new DocBuilder().doc, 'x', 2100)).toEqual([]);
   });
 });
+
+describe('floating days are gone', () => {
+  it('drops the old floating type and turns its blocks into annual leave', () => {
+    const { raw, blockId } = file((doc) => {
+      const types = doc.leaveTypes as Record<string, Record<string, unknown>>;
+      types.old = {
+        id: 'old',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+        key: 'floating',
+        name: { ro: 'Zi flotantă', en: 'Floating day' },
+        color: '#ffbdda',
+        budget: 'floating',
+        needsApproval: false,
+      };
+      blocks(doc)[Object.keys(blocks(doc)).at(-1)!]!.typeId = 'old';
+    });
+    const doc = migrate(raw);
+    expect(doc.leaveTypes.old).toBeUndefined();
+    expect(doc.leaveTypes[doc.blocks[blockId]!.typeId]!.key).toBe('annual');
+    expect(skippedCount(doc)).toBe(0);
+  });
+});

@@ -15,6 +15,6 @@ describe('pluralize', () => {
   it('uses one/other in English', () => {
     expect(pluralize('en', 'days', 1)).toBe('1 day');
     expect(pluralize('en', 'days', 5)).toBe('5 days');
-    expect(pluralize('en', 'floatingDays', 2)).toBe('2 floating days');
+    expect(pluralize('en', 'excusedDays', 2)).toBe('2 days of excused leave');
   });
 });

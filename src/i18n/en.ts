@@ -102,6 +102,8 @@ export const en: Record<MessageKey, string> = {
   'editor.delete': 'Delete',
   'editor.alsoHere': 'Also on these days:',
   'editor.overlap': 'Overlaps another planned or approved leave. Change the dates, or keep it as an idea.',
+  'editor.swapAdjacent': 'A swap day can only be the Friday before or the Monday after a weekend with a legal holiday.',
+  'editor.tooManyIdeas': 'There are already {max} ideas on {date}. Delete one, or choose other days.',
   'editor.deletedElsewhere': 'This leave was deleted on another device. Saving brings it back.',
   'editor.unsaved': 'You have unsaved changes.',
   'editor.discard': 'Discard them',

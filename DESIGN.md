@@ -33,7 +33,7 @@ src/
     holidays.ts      Orthodox Easter, RO public holidays per year, + overrides   (DAY-1..3)
     calendar.ts      dayKind(date, doc, personId) → weekend | holiday | leave(type) | work
     swaps.ts         weekend-holiday swap reminders + which option bridges better   (DAY-4, DAY-5)
-    balance.ts       annual + floating balances, per-type totals   (BAL-*)
+    balance.ts       annual + excused balances, per-type totals   (BAL-*)
     suggest.ts       bridge candidates + ranking   (SUG-1, 2, 7, 8)
     plan.ts          full-year plan proposal   (SUG-4)
     ics.ts           .ics export   (IO-2)
@@ -95,10 +95,10 @@ interface PlanDoc {
 interface Person extends Meta { name: string; color: string; hasAccount: boolean }
 
 interface LeaveType extends Meta {
-  key?: 'annual' | 'floating' | 'excused' | 'swap' | 'closed' | 'special' | 'sick' | 'unpaid';  // built-ins
+  key?: 'annual' | 'excused' | 'swap' | 'closed' | 'special' | 'sick' | 'unpaid';  // built-ins
   name: { ro: string; en: string };
   color: string;
-  budget: 'annual' | 'floating' | 'excused' | 'none';  // which balance it draws from (LT-2, LT-6)
+  budget: 'annual' | 'excused' | 'none';  // which balance it draws from (LT-2, LT-6)
   needsApproval: boolean;
   hidden?: boolean;
 }
@@ -121,7 +121,6 @@ interface HolidayOverride extends Meta {
 interface YearSettings extends Meta {
   personId: string; year: number;
   annualOpening: number;                      // BAL-1
-  floatingQuota: number;                      // LT-6
   excusedQuota: number;                       // LT-6
   closedCountsAgainstAnnual: boolean;       // LT-3
 }
@@ -232,9 +231,9 @@ One class, no React: open, auto-save, merge, retry, refresh and close, with ever
 
 `buildDays(doc, person, from, to)` (`calendar.ts`) gives each date:
 - `base`: `holiday`, `weekend` or `work`, from the calendar alone;
-- `blocks`: that person's live blocks covering the date, highest status first;
+- `blocks`: that person's live blocks covering the date, the day's owner first (`owner`: a planned/approved office-closed or swap day, then the higher status, then the older block; BLK-6);
 - `off`: `base ≠ work`, or covered by any `planned`/`approved` block (of any type);
-- `anchor`: a holiday, or a `planned`/`approved` floating, swap or office-closed day.
+- `anchor`: a holiday, or a `planned`/`approved` swap or office-closed day.
 
 Cost is always counted on `base = work` days. Being `off` is what lets a bridge pass through a day without paying for it.
 
@@ -243,7 +242,7 @@ Cost is always counted on `base = work` days. Being `off` is what lets a bridge 
 1. Find **anchors**: maximal runs of `off` days that contain at least one `anchor` day (§6.2).
 2. For each anchor and each `l, r ≥ 0` with `1 ≤ l + r ≤ maxCost` (default 5): add `l` working days to the left and `r` to the right. After each added working day, extend over any free days next to it, so runs merge across weekends and neighbouring anchors.
 3. Keep the range if both of its outer neighbours are `work` days. Remove duplicate ranges.
-4. Compute `cost` = number of `work` days inside, `gain` = range length, `ratio` = gain ÷ cost, and the split (floating first, up to the available floating days).
+4. Compute `cost` = number of `work` days inside, `gain` = range length, `ratio` = gain ÷ cost, and the split (excused leave first, up to what's available).
 5. Open swap reminders: run steps 1–4 twice, once with the Friday option and once with the Monday option. Label each candidate with the option it assumes.
 6. Drop dismissed ranges and ranges that don't overlap the year. Sort by ratio (descending), then by gain (descending), then by date.
 
@@ -260,12 +259,12 @@ The number of candidates is small: ≤ ~25 anchors × 21 (l, r) pairs per year.
 
   `gap_j` are the stretches with no break between consecutive breaks, including from 1 Jan to the first break and from the last break to 31 Dec. Squaring the gaps penalises one long stretch more than several short ones, which is what "spread through the year" means. `k` is calibrated so that the default `w = 0.5` reproduces plans like my past ones (tuned locally, on private data only).
 - **Solver:** dynamic programming over candidates sorted by start date, with state = (end of the last chosen break, budget used). The objective is additive per step, so this is exact. Size: ≲ 500 candidates × 30 budget × 365 days, which runs in milliseconds.
-- **Constraints:** chosen candidates don't overlap each other or the fixed breaks; the total cost stays within available annual plus floating days.
+- **Constraints:** chosen candidates don't overlap each other or the fixed breaks; the total cost stays within available annual plus excused leave.
 - **Output:** a preview list. I accept all, some or none (SUG-5).
 
 ### 6.5 Balances (BAL-*, LT-6)
 
-Accounting is **per working day**, not per block. Each `base = work` day of the year that a block covers is charged once, to its highest-status block, and to that block's budget (`blockBudget`, which applies LT-3). So overlapping ideas never double-count, and a block that crosses 31 Dec charges each year only for its own days.
+Accounting is **per working day**, not per block. Each `base = work` day of the year that a block covers is charged once, to the day's owner (§6.2), and to that block's budget (`blockBudget`, which applies LT-3). So overlapping ideas never double-count, and a block that crosses 31 Dec charges each year only for its own days.
 
 Per person and year:
 - `total = opening + Σ adjustments`;
@@ -275,7 +274,7 @@ Per person and year:
 - `ideas` = days covered only by ideas;
 - `ifIdeas = available − ideas`.
 
-The floating and excused balances use the same formulas with their quotas and no adjustments; both expire on 31 Dec. Suggestions pay floating first, then excused, then annual (SUG-7). Types with no budget still get per-type totals (LT-5).
+The excused balance uses the same formulas with its quota and no adjustments; it expires on 31 Dec. Suggestions pay excused leave first, then annual (SUG-7). Floating days existed until 2026-10-22; `migrate` drops their type from old files and turns any such block into annual leave. Types with no budget still get per-type totals (LT-5).
 
 ## 7. UI
 

@@ -29,8 +29,8 @@ describe('suggest: hand-checked breaks in the demo year (REQUIREMENTS §7)', () 
     expect(c, 'candidate missing').toBeDefined();
     expect(c!.leaveDays).toEqual(s.leave);
     expect(c!.gain).toBe(daysBetween(s.start, s.end).length);
-    // One floating day is still unplaced, so it pays first (SUG-7).
-    expect(c!.split).toEqual({ floating: 1, excused: 0, annual: s.leave.length - 1 });
+    // No excused leave in the demo year: annual leave pays (SUG-7).
+    expect(c!.split).toEqual({ excused: 0, annual: s.leave.length });
   });
 
   it('ranks the Christmas break first: 1 leave day for 10 days off', () => {
@@ -83,13 +83,13 @@ describe('suggest: rules', () => {
     expect(find(suggest(b.doc, b.personId, 2027), '2027-08-13', '2027-08-16')).toBeUndefined();
   });
 
-  it('pays floating, then excused, then annual leave (SUG-7)', () => {
+  it('pays excused leave first, then annual leave (SUG-7)', () => {
     const b = new DocBuilder();
-    b.year(2027, { annualOpening: 21, floatingQuota: 1, excusedQuota: 2 });
-    expect(find(suggest(b.doc, b.personId, 2027), '2027-04-24', '2027-05-03')!.split).toEqual({ floating: 1, excused: 2, annual: 1 });
+    b.year(2027, { annualOpening: 21, excusedQuota: 2 });
+    expect(find(suggest(b.doc, b.personId, 2027), '2027-04-24', '2027-05-03')!.split).toEqual({ excused: 2, annual: 2 });
     const none = new DocBuilder();
     none.year(2027, { annualOpening: 21 });
-    expect(find(suggest(none.doc, none.personId, 2027), '2027-04-24', '2027-05-03')!.split).toEqual({ floating: 0, excused: 0, annual: 4 });
+    expect(find(suggest(none.doc, none.personId, 2027), '2027-04-24', '2027-05-03')!.split).toEqual({ excused: 0, annual: 4 });
   });
 
   it('offers candidates for each option of an open swap reminder (SUG-8)', () => {

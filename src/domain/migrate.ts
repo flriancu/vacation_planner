@@ -38,7 +38,7 @@ const VALID: { [K in keyof Collections]: (r: Raw, types: ReadonlySet<string>) =>
   people: (r) => isText(r.name),
   leaveTypes: (r) =>
     isNames(r.name) &&
-    ['annual', 'floating', 'excused', 'none'].includes(r.budget as string) &&
+    ['annual', 'excused', 'none'].includes(r.budget as string) &&
     typeof r.needsApproval === 'boolean' &&
     optional(r.key, (k) => BUILTIN_TYPES.some((b) => b.key === k)),
   blocks: (r, types) =>
@@ -53,7 +53,6 @@ const VALID: { [K in keyof Collections]: (r: Raw, types: ReadonlySet<string>) =>
     isText(r.personId) &&
     isYear(r.year) &&
     isNumber(r.annualOpening) &&
-    isNumber(r.floatingQuota) &&
     isNumber(r.excusedQuota) &&
     typeof r.closedCountsAgainstAnnual === 'boolean',
   adjustments: (r) => isText(r.personId) && isYear(r.year) && isDay(r.date) && isNumber(r.days) && isText(r.note),
@@ -80,12 +79,13 @@ export function migrate(raw: unknown): PlanDoc {
     throw new UnsupportedPlanError('The plan file is missing its owner or settings.');
   }
 
-  const out: Raw = { ...raw, owner: { ...raw.owner }, settings: readSettings(raw.settings) };
+  const base = withoutFloating(raw);
+  const out: Raw = { ...base, owner: { ...raw.owner }, settings: readSettings(raw.settings) };
   const skipped: NonNullable<PlanDoc['skipped']> = {};
   const types = new Set<string>();
   // Leave types first: blocks are checked against them (deleted types too: old blocks keep theirs).
   for (const key of ['leaveTypes', ...COLLECTION_KEYS.filter((k) => k !== 'leaveTypes')] as const) {
-    const source = isObject(raw[key]) ? raw[key] : {};
+    const source = isObject(base[key]) ? base[key] : {};
     const kept: Record<string, Meta> = {};
     const set: Raw = { ...(isObject(raw.skipped) && isObject(raw.skipped[key]) ? raw.skipped[key] : {}) };
     for (const [id, record] of Object.entries(source)) {
@@ -118,6 +118,29 @@ function readSettings(s: Raw): Settings {
 }
 
 const alive = <T extends Meta>(c: Record<string, T>) => Object.values(c).filter((r) => !r.deleted);
+
+/**
+ * Floating days are gone (2026-10-22: they were annual leave). Files from before still have the
+ * built-in "Zi flotantă" type: it is dropped, and any block of it becomes annual leave.
+ */
+function withoutFloating(raw: Raw): Raw {
+  if (!isObject(raw.leaveTypes)) return raw;
+  const types = Object.entries(raw.leaveTypes);
+  const floating = new Set(types.filter(([, t]) => isObject(t) && t.key === 'floating').map(([id]) => id));
+  if (floating.size === 0) return raw;
+  const annual =
+    types.find(([id, t]) => isObject(t) && t.key === 'annual' && t.deleted !== true && !floating.has(id))?.[0] ?? 'type-annual';
+  const leaveTypes: Raw = {};
+  for (const [id, t] of types) if (!floating.has(id)) put(leaveTypes, id, t);
+  let blocks = raw.blocks;
+  if (isObject(blocks)) {
+    const retyped: Raw = {};
+    for (const [id, b] of Object.entries(blocks))
+      put(retyped, id, isObject(b) && floating.has(b.typeId as string) ? { ...b, typeId: annual } : b);
+    blocks = retyped;
+  }
+  return { ...raw, leaveTypes, blocks };
+}
 
 /** The owner's person and every built-in leave type, which the screens rely on. */
 function withEssentials(doc: PlanDoc): PlanDoc {

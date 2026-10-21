@@ -3,7 +3,7 @@ import type { Budget } from '../domain/schema';
 import type { I18n } from '../i18n';
 import type { PluralKey } from '../i18n/plurals';
 
-const SPEND: Record<Budget, PluralKey | null> = { annual: 'leaveDays', floating: 'floatingDays', excused: 'excusedDays', none: null };
+const SPEND: Record<Budget, PluralKey | null> = { annual: 'leaveDays', excused: 'excusedDays', none: null };
 const WEEKDAY: Intl.DateTimeFormatOptions = { weekday: 'long' };
 const DAY_MONTH: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'long' };
 const DAY_MONTH_YEAR: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'long', year: 'numeric' };

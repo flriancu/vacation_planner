@@ -1,6 +1,6 @@
 # Vacation planner: requirements
 
-Status: draft 3, elicited 2026-10-21 (draft 2 added the employer's swap and floating days and the OAuth mode; draft 3 removes personal data, see NF-7). This file is the contract: change it first, then the code.
+Status: draft 3, elicited 2026-10-21 (draft 2 added the employer's swap days and the OAuth mode; draft 3 removes personal data, see NF-7; floating days were removed on 2026-10-22: the days the old sheet showed as floating were annual leave). This file is the contract: change it first, then the code.
 Source of truth for the current workflow: my old hand-made spreadsheet (private, not in this repo).
 
 ## 1. Goal
@@ -20,10 +20,9 @@ The data model is per person from v1, so v2 adds features but needs no migration
 ## 3. Glossary
 
 - **Working day**: Mon–Fri that is not a public holiday and not covered by a free office-closed day.
-- **Day off (free)**: a weekend, a public holiday, or a day covered by a leave type that does not count against annual leave (office-closed day, swap day, floating day…).
+- **Day off (free)**: a weekend, a public holiday, or a day covered by a leave type that does not count against annual leave (office-closed day, swap day…).
 - **Swap day**: when a legal holiday falls on a Saturday or Sunday, the employer requires me to take either the Friday before or the Monday after as a day off. Which one is my choice.
-- **Floating day**: an employer bonus day that I place on any date I choose. HR sets the yearly number; it seems to depend on how many legal holidays fall on weekends, but that isn't predictable, so I enter it by hand.
-- **Office-closed day**: a day the office is closed, e.g. between Christmas and New Year. Besides swap and floating days, it is the only extra day off the employer gives.
+- **Office-closed day**: a day the office is closed, e.g. between Christmas and New Year. Besides swap days, it is the only extra day off the employer gives.
 - **Leave block**: a date range of one leave type with a status. Its **leave cost** is the number of working days inside it, charged to the type's budget.
 - **Days off gained**: the length of the whole run of consecutive non-working days that the block creates, including the free days around it.
 - **Bridge (punte) candidate**: a range `[a, b]` where day `a-1` and day `b+1` are working days, every day in the range is free or covered by leave, and the range contains at least one public holiday or office-closed day.
@@ -43,7 +42,7 @@ Priority: **M** = must (v1), **S** = should (v1 if cheap), **v2** = phase 2.
 | CAL-3 | M | Separate months with a stepped line that follows the real first day of each month. Show the month name in a narrow vertical band along the weeks whose Monday is in that month, like the merged cells of the old sheet; short bands at the view's edges leave out the year. |
 | CAL-4 | M | Two colours only: one tint for days off anyway (weekend, public holiday, office closed) and one accent for all my leave, whatever its type, swap days included (I choose and request them). The kind of leave is shown in the editor and tooltip, not by colour. Holidays also get a dot under the number. |
 | CAL-5 | M | Holiday names are not drawn on the calendar (only the dot, CAL-4): they are in the day's tooltip and screen-reader label, and in the hint line when the day is picked ("Prima zi: marți 6 ianuarie (Boboteaza)"). This keeps the calendar narrow, leaving room for side panels. |
-| CAL-6 | M | Status matters most and is drawn as a lightness ramp, with line style as a second cue: `idea` = a very faint tint + dashed outline; `planned` = light fill + solid outline; `approved` = the full accent + thick outline + bold number. Each leave block is one outline, even across weeks. Past and out-of-year days mute only the number, never the fill. Contrast meets WCAG 1.4.11 (≥ 3:1 for outlines and fills against neighbouring cells) and 1.4.3 (≥ 4.5:1 for numbers) in every scheme. |
+| CAL-6 | M | Status matters most and is drawn as a lightness ramp, with line style as a second cue: `idea` = a very faint tint + dashed outline; `planned` = light fill + solid outline; `approved` = the full accent + thick outline + bold number. Each leave block is one outline, even across weeks. Days off anyway (weekends, holidays, office closed) keep their own fill inside a leave block: the outline shows the range, the fill what each day is. A day draws at most four outlines. Past and out-of-year days mute only the number, never the fill. Contrast meets WCAG 1.4.11 (≥ 3:1 for outlines and fills against neighbouring cells) and 1.4.3 (≥ 4.5:1 for numbers) in every scheme. |
 | CAL-7 | M | Say in plain words what a block costs and what it gives, with full dates and no abbreviations, e.g. "Folosești 1 zi de concediu → ești liber 5 zile la rând: vineri 27 noiembrie – marți 1 decembrie". Shown in the editor and as the tooltip of the block's days; nothing is written on the calendar itself. |
 | CAL-8 | M | Create a block by selecting a date range (drag on desktop, tap start and tap end on phone), then choose its type and status. |
 | CAL-9 | M | Tapping or clicking a block opens it to edit dates, type, status and note, or to delete it. |
@@ -58,7 +57,7 @@ Priority: **M** = must (v1), **S** = should (v1 if cheap), **v2** = phase 2.
 | DAY-1 | M | Calculate Romanian public holidays for any year (Labor Code art. 139, current list): 1–2 Jan, 6–7 Jan, 24 Jan, Orthodox Good Friday, Easter Sunday and Monday, 1 May, 1 Jun, Rusalii Sunday and Monday (Easter +49/+50), 15 Aug, 30 Nov, 1 Dec, 25–26 Dec. |
 | DAY-2 | M | Holiday names in Romanian and English. |
 | DAY-3 | M | Per-year overrides: add, remove or rename a public holiday for a specific date, because the law changes (6–7 Jan were added recently). Overrides are stored in my file. |
-| DAY-4 | M | Legal holidays on a Saturday or Sunday, except Easter Sunday and Rusalii Sunday, which always fall on Sunday, are listed for the year as **swap reminders**: "Sun 24 Jan 2027: choose Fri 22 or Mon 25 Jan". The reminder stays open until a swap day is entered for it. I enter swap days by hand (one click on either suggested day). |
+| DAY-4 | M | Legal holidays on a Saturday or Sunday, except Easter Sunday and Rusalii Sunday, which always fall on Sunday, are listed for the year as **swap reminders**: "Sun 24 Jan 2027: choose Fri 22 or Mon 25 Jan". The reminder stays open until a swap day is entered for it. I enter swap days by hand (one click on either suggested day). A swap day is only ever the Friday just before or the Monday just after such a weekend, and a working day itself: the editor won't save one anywhere else. |
 | DAY-5 | S | Each swap reminder shows which of the two days makes the better bridge given the rest of the plan (e.g. "Friday gives 4 days off with 1 leave day before it"). |
 | DAY-6 | M | I enter the days the office is closed by hand each year, as blocks of the *office closed* leave type (§4.3), status `approved`. |
 
@@ -66,9 +65,9 @@ Priority: **M** = must (v1), **S** = should (v1 if cheap), **v2** = phase 2.
 
 | ID | Pri | Requirement |
 |---|---|---|
-| LT-1 | M | Built-in types: **annual leave** (concediu de odihnă), **floating day**, **excused leave** (învoire), **swap day**, **office closed** (birou închis), **special event** (wedding, birth, death in the family…), **sick**, **unpaid leave** (concediu fără plată). |
-| LT-2 | M | Each type has a name (RO and EN), a colour, a "counts against annual leave" setting, and a "needs approval" setting. Defaults: annual counts against annual leave and needs approval; floating days have their own quota (LT-6) and don't need approval; excused leave has its own quota (LT-6) and needs approval; swap days need approval like leave (they cost nothing); office-closed days need no approval; the rest count against nothing. |
-| LT-6 | M | Floating days and excused leave each have a per-year quota that I enter by hand (excused leave: at most 2 a year). Unused days of both expire on 31 Dec. Annual leave carries over to the next year as a BAL-2 adjustment. |
+| LT-1 | M | Built-in types: **annual leave** (concediu de odihnă), **excused leave** (învoire), **swap day**, **office closed** (birou închis), **special event** (wedding, birth, death in the family…), **sick**, **unpaid leave** (concediu fără plată). |
+| LT-2 | M | Each type has a name (RO and EN), a colour, a "counts against annual leave" setting, and a "needs approval" setting. Defaults: annual counts against annual leave and needs approval; excused leave has its own quota (LT-6) and needs approval; swap days need approval like leave (they cost nothing); office-closed days need no approval; the rest count against nothing. |
+| LT-6 | M | Excused leave has a per-year quota that I enter by hand (at most 2 a year). Unused days expire on 31 Dec. Annual leave carries over to the next year as a BAL-2 adjustment. |
 | LT-3 | M | The "counts against annual leave" setting for office-closed days can be changed per year, because some years the employer takes them out of annual leave. |
 | LT-4 | S | I can add or rename types. Built-in types can be hidden but not deleted. |
 | LT-5 | M | The app keeps a separate per-year total of days used for each type. |
@@ -81,8 +80,8 @@ Priority: **M** = must (v1), **S** = should (v1 if cheap), **v2** = phase 2.
 | BLK-2 | M | Status `planned`: I intend to take it. Its cost is reserved from the balance. |
 | BLK-3 | M | Status `approved`: signed off by HR or my manager. Its cost is reserved; once its dates have passed, it counts as **used**. |
 | BLK-4 | M | Status moves forward or back in one step. Changing an `approved` block's dates shows a warning in the editor (tell HR too); no extra dialog. For types that don't need approval (LT-2), `planned` is the final stage. |
-| BLK-5 | M | Blocks of the same person must not overlap: the editor won't save a planned or approved block over another one. Exceptions: `idea` blocks may overlap each other and other blocks, and leave may span office-closed days (BLK-6). |
-| BLK-6 | M | Leave cost counts working days only. Weekends, public holidays and free office-closed day inside a block cost nothing. |
+| BLK-5 | M | Blocks of the same person must not overlap: the editor won't save a planned or approved block over another one. Exceptions: `idea` blocks may overlap each other and other blocks, at most three ideas on any day; and leave may span office-closed days (BLK-6). |
+| BLK-6 | M | Leave cost counts working days only. Weekends, public holidays and office-closed days inside a block cost nothing. When blocks cover the same day, the reason for the day off owns it: a planned or approved office-closed or swap day before any other leave, then the higher status, then the older block. So the cost never depends on which block was entered first. |
 
 ### 4.5 Balance (BAL)
 
@@ -93,7 +92,7 @@ Priority: **M** = must (v1), **S** = should (v1 if cheap), **v2** = phase 2.
 | BAL-3 | M | Always show: opening balance + adjustments; used; reserved (planned + future approved); **available** = total − used − reserved; and "if all ideas are accepted". |
 | BAL-4 | M | Warn when planned plus approved leave exceeds the total. Don't block it. |
 | BAL-5 | S | Per-year totals for the non-annual types (LT-5) are shown next to the balance. |
-| BAL-6 | M | Floating-day and excused-leave balances with the same breakdown as BAL-3 (quota, used, reserved, available). From October on, warn if any of them are still unplaced, because they expire on 31 Dec. |
+| BAL-6 | M | An excused-leave balance with the same breakdown as BAL-3 (quota, used, reserved, available). From October on, warn if any of it is still unplaced, because it expires on 31 Dec. |
 
 ### 4.6 Suggestions (SUG)
 
@@ -105,7 +104,7 @@ Priority: **M** = must (v1), **S** = should (v1 if cheap), **v2** = phase 2.
 | SUG-4 | M | **Propose plan**: picks a set of non-overlapping candidates within the remaining available balance, balancing two goals: (a) a high total ratio, and (b) spreading breaks through the year, measured as the longest stretch with no break of ≥ 3 consecutive days off. Shorter is better. The weight between (a) and (b) is a slider. |
 | SUG-5 | M | A proposed plan is shown as a preview; I accept all of it, part of it, or none. Accepted entries become `idea` blocks. |
 | SUG-6 | S | Explain each suggestion in one line, e.g. "Mon 12 – Wed 14 Aug bridges the weekend to Sf. Maria (Thu–Fri)". |
-| SUG-7 | M | Suggestions and proposed plans spend expiring days first (floating, then excused), then annual leave. The cost is shown split, e.g. "1 excused + 2 leave → 9". |
+| SUG-7 | M | Suggestions and proposed plans spend expiring days first (excused leave), then annual leave. The cost is shown split, e.g. "1 excused + 2 leave → 9". |
 | SUG-8 | M | Swap reminders that are still open (DAY-4) are treated as undecided: suggestions show both options (Friday / Monday) as separate candidates. |
 
 ### 4.7 People and sharing (PPL)
@@ -123,7 +122,7 @@ Priority: **M** = must (v1), **S** = should (v1 if cheap), **v2** = phase 2.
 
 | ID | Pri | Requirement |
 |---|---|---|
-| IO-1 | M | One-time import of my old spreadsheet format. The imported records go into my Drive file as history; nothing from the sheet ever goes into the repo (NF-7). Fill colours: light pink FFE5F0 = weekend; pink FFBDDA = holiday; dark pink FF96C4 = swap day if it is the Friday before or Monday after a weekend holiday, otherwise office-closed day. A pink FFBDDA weekday that isn't a calculated holiday is either a floating day or an office-closed day. The preview suggests floating day (status `planned`), and I can change it. Medium-border outlines map to `idea` blocks (they were "sugestie concediu"). White and no-fill cells mean the same thing. Show a preview and the list of every classification before saving. |
+| IO-1 | M | One-time import of my old spreadsheet format. The imported records go into my Drive file as history; nothing from the sheet ever goes into the repo (NF-7). Fill colours: light pink FFE5F0 = weekend; pink FFBDDA = holiday; dark pink FF96C4 = swap day if it is the Friday before or Monday after a weekend holiday, otherwise office-closed day. A pink FFBDDA weekday that isn't a calculated holiday is annual leave or an office-closed day. The preview suggests annual leave (status `approved`), and I can change it. Medium-border outlines map to `idea` blocks (they were "sugestie concediu"). White and no-fill cells mean the same thing. Show a preview and the list of every classification before saving. |
 | IO-2 | M | Export `.ics` for a chosen year, filtered by status (default: planned + approved). One all-day event per block, with a stable UID so re-importing updates events instead of duplicating them. |
 | IO-3 | M | Push to Google Calendar: create or update one event per approved (and, optionally, planned) block in a chosen calendar; deleting or changing the block updates the event. Ask for the Calendar permission only when I first use this (incremental consent). |
 
@@ -190,7 +189,7 @@ save(calendarId, doc, baseVersion) → {version} | Conflict
 The public cases use a fictional plan for 2027 (`tests/fixtures/demo2027.ts`); only its holidays are real (NF-7). The fictional person:
 - took swap days on Mon 4 Jan (for Sat 2 Jan; Fri 1 Jan is itself a holiday), Mon 16 Aug (for Sun 15 Aug) and Fri 24 Dec (for Sat 25 Dec);
 - dismissed the Sun 26 Dec reminder and left Sun 24 Jan open;
-- has the office closed 28–31 Dec, a floating quota of 2, and one floating day on Mon 31 May.
+- has the office closed 28–31 Dec and on Mon 31 May.
 
 Given that plan, the ranked list (SUG-2) must contain at least these, with exactly these leave days:
 
@@ -206,7 +205,7 @@ Given that plan, the ranked list (SUG-2) must contain at least these, with exact
 | Fri 24 Dec 2027 – Sun 2 Jan 2028 | 27 Dec | 1 → 10 (ranked first) |
 
 Also:
-- The unplaced floating day pays first: each case above costs 1 floating day plus the rest in annual leave (SUG-7).
+- With no excused leave that year, each case above is paid in annual leave (SUG-7).
 - The full candidate list equals a brute-force search over every range that overlaps the year, for a cost limit of 3 and of 5 (SUG-1).
 - DAY-1 must give Orthodox Easter on 20 Apr 2025, 12 Apr 2026, 2 May 2027 and 16 Apr 2028, Rusalii on 20–21 Jun 2027, and both names on 1 Jun 2026 (Children's Day and Rusalii Monday).
 - DAY-4 for 2027 must list Sat 2 Jan (option: Mon 4 Jan only), Sun 24 Jan (Fri 22 or Mon 25), Sat 1 May (no option: Good Friday and Easter Monday surround it), Sun 15 Aug, Sat 25 Dec and Sun 26 Dec, and not Easter Sunday or Rusalii Sunday. For Sun 30 Nov 2031 the only option is Fri 28 Nov, because Mon 1 Dec is a holiday.
@@ -221,12 +220,12 @@ None.
 ### Assumptions to confirm
 
 - Easter Sunday and Rusalii Sunday don't create a swap day. My old sheet has none for them.
-- Unused floating days and excused leave expire on 31 Dec (LT-6).
-- When both days of a weekend are holidays (e.g. 6–7 Jan), my old sheet shows only one swap day and the year got floating days instead. Because HR decides, the app only reminds me about the swaps; it doesn't enforce one swap per holiday.
+- Unused excused leave expires on 31 Dec (LT-6).
+- When both days of a weekend are holidays (e.g. 6–7 Jan), my old sheet shows only one swap day: the second holiday got none. Because HR decides, the app only reminds me about the swaps; it doesn't enforce one swap per holiday.
 
 ### Resolved
 
-- Weekdays the old sheet marks as holidays that aren't legal holidays are floating days or office-closed days; I classify them in the IO-1 preview.
+- Weekdays the old sheet marks as holidays that aren't legal holidays are annual leave or office-closed days; I classify them in the IO-1 preview.
 - OAuth app: production mode, unverified (AUTH-4).
 - Repo: public, with no personal data (NF-7).
 - Tech stack: React + TypeScript + Vite, with Vitest and Playwright tests. See [DESIGN.md](DESIGN.md).

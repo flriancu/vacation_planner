@@ -35,20 +35,19 @@ describe('yearBalance', () => {
     expect(yearBalance(b.doc, b.personId, 2025, '2025-01-01').overbooked.annual).toBe(true);
   });
 
-  it('keeps floating days on their own quota (LT-6)', () => {
+  it('charges nothing for swap and office-closed days', () => {
     const b = demo2027();
     const bal = yearBalance(b.doc, b.personId, 2027, '2027-07-01');
-    expect(bal.floating).toEqual({ quota: 2, total: 2, used: 0, reserved: 1, available: 1, ideas: 0, ifIdeas: 1 });
-    expect(bal.annual.reserved + bal.annual.used).toBe(0); // swap and office-closed days are free
-    expect(bal.expiring.floating).toBe(false);
+    expect(bal.annual.reserved + bal.annual.used).toBe(0);
   });
 
-  it('warns from 1 October about unplaced floating days (BAL-6)', () => {
-    const b = demo2027();
-    expect(yearBalance(b.doc, b.personId, 2027, '2027-09-30').expiring.floating).toBe(false);
-    expect(yearBalance(b.doc, b.personId, 2027, '2027-10-01').expiring.floating).toBe(true);
-    b.block('floating', '2027-11-29', '2027-11-29', 'planned');
-    expect(yearBalance(b.doc, b.personId, 2027, '2027-10-01').expiring.floating).toBe(false);
+  it('warns from 1 October about unplaced excused leave (BAL-6)', () => {
+    const b = new DocBuilder();
+    b.year(2027, { annualOpening: 21, excusedQuota: 1 });
+    expect(yearBalance(b.doc, b.personId, 2027, '2027-09-30').expiring.excused).toBe(false);
+    expect(yearBalance(b.doc, b.personId, 2027, '2027-10-01').expiring.excused).toBe(true);
+    b.block('excused', '2027-11-29', '2027-11-29', 'planned');
+    expect(yearBalance(b.doc, b.personId, 2027, '2027-10-01').expiring.excused).toBe(false);
   });
 
   it('keeps excused leave on its own expiring quota (LT-6)', () => {
@@ -57,7 +56,7 @@ describe('yearBalance', () => {
     b.block('excused', '2027-03-12', '2027-03-12', 'approved');
     const bal = yearBalance(b.doc, b.personId, 2027, '2027-10-15');
     expect(bal.excused).toEqual({ quota: 2, total: 2, used: 1, reserved: 0, available: 1, ideas: 0, ifIdeas: 1 });
-    expect(bal.expiring).toEqual({ floating: false, excused: true });
+    expect(bal.expiring).toEqual({ excused: true });
     expect(bal.annual.used).toBe(0);
   });
 
@@ -65,8 +64,8 @@ describe('yearBalance', () => {
     const b = demo2027();
     b.update('yearSettings', { ...getYearSettings(b.doc, b.personId, 2027)!, closedCountsAgainstAnnual: true });
     const bal = yearBalance(b.doc, b.personId, 2027, '2027-12-30');
-    // 28–29 Dec are past (used); 30–31 Dec are still reserved.
-    expect(bal.annual).toMatchObject({ used: 2, reserved: 2, available: 17 });
+    // 28–29 Dec are past (used); 30–31 Dec and the planned 31 May are still reserved.
+    expect(bal.annual).toMatchObject({ used: 2, reserved: 3, available: 16 });
   });
 
   it('counts every leave type separately (LT-5)', () => {

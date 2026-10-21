@@ -15,8 +15,8 @@ export interface Candidate {
   cost: number;
   ratio: number;
   leaveDays: ISODate[];
-  /** How `cost` is paid: expiring days first, floating then excused, then annual leave (SUG-7). */
-  split: { floating: number; excused: number; annual: number };
+  /** How `cost` is paid: expiring days (excused leave) first, then annual leave (SUG-7). */
+  split: { excused: number; annual: number };
   holidays: Holiday[];
   /** Set when the candidate relies on an open swap reminder being resolved this way (SUG-8). */
   assumesSwap?: { holiday: ISODate; date: ISODate };
@@ -94,7 +94,7 @@ export function swapOptionScores(doc: PlanDoc, personId: string, reminder: SwapR
     while (days.has(addDays(end, 1)) && off(addDays(end, 1))) end = addDays(end, 1);
     const best = rawCandidates(days, maxCost, date)
       .filter((c) => c.start <= date && date <= c.end)
-      .map((c) => ({ ...c, split: { floating: 0, excused: 0, annual: c.cost } }))
+      .map((c) => ({ ...c, split: { excused: 0, annual: c.cost } }))
       .sort(byRank)[0];
     return { date, runLength: daysBetween(start, end).length, ...(best && { best }) };
   });
@@ -176,15 +176,9 @@ function rawCandidates(days: Map<ISODate, DayInfo>, maxCost: number, swap?: ISOD
 function split(leaveDays: ISODate[], available: (year: number, budget: ExpiringBudget) => number): Candidate['split'] {
   const perYear = new Map<number, number>();
   for (const d of leaveDays) perYear.set(yearOf(d), (perYear.get(yearOf(d)) ?? 0) + 1);
-  let floating = 0;
   let excused = 0;
-  for (const [y, n] of perYear) {
-    const f = Math.min(n, available(y, 'floating'));
-    const e = Math.min(n - f, available(y, 'excused'));
-    floating += f;
-    excused += e;
-  }
-  return { floating, excused, annual: leaveDays.length - floating - excused };
+  for (const [y, n] of perYear) excused += Math.min(n, available(y, 'excused'));
+  return { excused, annual: leaveDays.length - excused };
 }
 
 function byRank(a: Candidate, b: Candidate): number {

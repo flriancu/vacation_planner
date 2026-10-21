@@ -24,14 +24,13 @@ export interface TypeTotals {
 export interface YearBalance {
   year: number;
   annual: BudgetBalance & { opening: number; adjustments: number };
-  floating: BudgetBalance & { quota: number };
   excused: BudgetBalance & { quota: number };
   /** Working days per leave type id (LT-5). */
   byType: Record<string, TypeTotals>;
   /** BAL-4: more booked than available. */
-  overbooked: { annual: boolean; floating: boolean; excused: boolean };
-  /** BAL-6: expiring days (floating, excused) still unplaced from 1 October on. */
-  expiring: { floating: boolean; excused: boolean };
+  overbooked: { annual: boolean; excused: boolean };
+  /** BAL-6: expiring days (excused leave) still unplaced from 1 October on. */
+  expiring: { excused: boolean };
 }
 
 /**
@@ -44,18 +43,17 @@ export interface YearBalance {
 export function yearBalance(doc: PlanDoc, personId: string, year: number, today: ISODate): YearBalance {
   const settings = getYearSettings(doc, personId, year);
   const opening = settings?.annualOpening ?? 0;
-  const floatingQuota = settings?.floatingQuota ?? 0;
   const excusedQuota = settings?.excusedQuota ?? 0;
   const adjustments = live(doc.adjustments)
     .filter((a) => a.personId === personId && a.year === year)
     .reduce((sum, a) => sum + a.days, 0);
 
-  const charged = { annual: zero(), floating: zero(), excused: zero() };
+  const charged = { annual: zero(), excused: zero() };
   const byType: Record<string, TypeTotals> = {};
 
   for (const day of buildDays(doc, personId, yearStart(year), yearEnd(year)).values()) {
     if (day.base !== 'work') continue;
-    const block = day.blocks[0]; // highest status first
+    const block = day.blocks[0]; // the day's owner (calendar.ts `owner`)
     if (!block) continue;
     const bucket: keyof TypeTotals =
       block.status === 'idea' ? 'ideas' : block.status === 'approved' && day.date < today ? 'used' : 'reserved';
@@ -65,17 +63,15 @@ export function yearBalance(doc: PlanDoc, personId: string, year: number, today:
   }
 
   const annual = finish(opening + adjustments, charged.annual);
-  const floating = finish(floatingQuota, charged.floating);
   const excused = finish(excusedQuota, charged.excused);
   const lateInYear = today >= makeDate(year, 10, 1) && today <= yearEnd(year);
   return {
     year,
     annual: { ...annual, opening, adjustments },
-    floating: { ...floating, quota: floatingQuota },
     excused: { ...excused, quota: excusedQuota },
     byType,
-    overbooked: { annual: annual.available < 0, floating: floating.available < 0, excused: excused.available < 0 },
-    expiring: { floating: lateInYear && floating.available > 0, excused: lateInYear && excused.available > 0 },
+    overbooked: { annual: annual.available < 0, excused: excused.available < 0 },
+    expiring: { excused: lateInYear && excused.available > 0 },
   };
 }
 

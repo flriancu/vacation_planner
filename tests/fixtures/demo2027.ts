@@ -10,12 +10,12 @@ import { DocBuilder } from './builder';
  * - Sat 1 May: Good Friday and Easter Monday surround it, so there is no option at all.
  * - Sun 15 Aug: swap on Mon 16 Aug.
  * - Sat 25 Dec: swap on Fri 24 Dec.
- * - Sun 26 Dec: dismissed (HR gave a floating day instead).
- * Plus office-closed days 28–31 Dec and one of two floating days on Mon 31 May.
+ * - Sun 26 Dec: dismissed (HR said no swap for it).
+ * Plus office-closed days 28–31 Dec and on Mon 31 May.
  */
 export function demo2027(): DocBuilder {
   const b = new DocBuilder();
-  b.year(2027, { annualOpening: 21, floatingQuota: 2 });
+  b.year(2027, { annualOpening: 21 });
 
   b.block('swap', '2027-01-04', '2027-01-04', 'approved', { swapFor: '2027-01-02' });
   b.block('swap', '2027-08-16', '2027-08-16', 'approved', { swapFor: '2027-08-15' });
@@ -23,6 +23,6 @@ export function demo2027(): DocBuilder {
   b.dismissSwap('2027-12-26');
 
   b.block('closed', '2027-12-28', '2027-12-31');
-  b.block('floating', '2027-05-31', '2027-05-31', 'planned');
+  b.block('closed', '2027-05-31', '2027-05-31', 'planned');
   return b;
 }

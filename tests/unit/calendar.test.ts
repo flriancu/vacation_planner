@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { blockBudget, buildDays, findOverlaps } from '../../src/domain/calendar';
+import { blockStats } from '../../src/domain/blocks';
+import { blockBudget, buildDays, findOverlaps, fullOfIdeas, MAX_IDEAS_PER_DAY } from '../../src/domain/calendar';
 import { DocBuilder } from '../fixtures/builder';
 import { demo2027 } from '../fixtures/demo2027';
 
 describe('buildDays', () => {
-  it('classifies the demo year: holidays, weekends, swap, office-closed and floating days', () => {
+  it('classifies the demo year: holidays, weekends, swap and office-closed days', () => {
     const { doc, personId } = demo2027();
     const days = buildDays(doc, personId, '2026-12-31', '2028-01-03');
     const kind = (d: string) => {
@@ -16,17 +17,17 @@ describe('buildDays', () => {
     expect(kind('2027-01-03')).toBe('weekend off');
     expect(kind('2027-01-04')).toBe('work off anchor'); // swap day
     expect(kind('2027-01-05')).toBe('work');
-    expect(kind('2027-05-31')).toBe('work off anchor'); // floating day
+    expect(kind('2027-05-31')).toBe('work off anchor'); // office closed
     expect(kind('2027-12-27')).toBe('work'); // the dismissed 26 Dec swap
     expect(kind('2027-12-28')).toBe('work off anchor'); // office-closed day
     expect(kind('2028-01-03')).toBe('work');
   });
 
-  it('orders blocks by status, ignores ideas for "off", and anchors on floating, swap and office-closed days', () => {
+  it('orders blocks by status, ignores ideas for "off", and anchors on swap and office-closed days', () => {
     const b = new DocBuilder();
     b.block('annual', '2025-03-03', '2025-03-07', 'idea');
     b.block('annual', '2025-03-05', '2025-03-05', 'planned');
-    b.block('floating', '2025-03-10', '2025-03-10', 'planned');
+    b.block('swap', '2025-03-10', '2025-03-10', 'planned');
     const days = buildDays(b.doc, b.personId, '2025-03-01', '2025-03-15');
     expect(days.get('2025-03-03')!.off).toBe(false);
     expect(days.get('2025-03-05')!.blocks.map((x) => x.status)).toEqual(['planned', 'idea']);
@@ -56,7 +57,6 @@ describe('blockBudget', () => {
     const block = b.block('closed', '2028-12-27');
     expect(blockBudget(b.doc, block, 2028)).toBe('annual');
     expect(blockBudget(b.doc, block, 2029)).toBe('none');
-    expect(blockBudget(b.doc, b.block('floating', '2028-06-02'), 2028)).toBe('floating');
   });
 });
 
@@ -68,6 +68,29 @@ describe('findOverlaps', () => {
     b.block('annual', '2025-07-08', '2025-07-09', 'idea');
     b.block('annual', '2025-07-16', '2025-07-18', 'planned');
     expect(findOverlaps(b.doc, b.personId)).toEqual([[a, c]]);
+  });
+
+  it('gives an office-closed day to the closure, not to leave around it, whichever was entered first (BLK-6)', () => {
+    const b = new DocBuilder();
+    const leave = b.block('annual', '2027-12-20', '2028-01-07', 'approved'); // entered before the closure
+    const closed = b.block('closed', '2027-12-28', '2027-12-31', 'planned');
+    const days = buildDays(b.doc, b.personId, '2027-12-01', '2028-01-31');
+    expect(days.get('2027-12-29')!.blocks[0]!.id).toBe(closed.id);
+    expect(days.get('2027-12-22')!.blocks[0]!.id).toBe(leave.id);
+    // 20-24 and 27 Dec, 3-5 Jan: 9 working days. 28-31 Dec are the office's; 25-26 Dec and 1-2 Jan
+    // fall on weekends; 6-7 Jan are holidays.
+    expect(blockStats(days, leave).cost).toBe(9);
+  });
+
+  it('allows at most three ideas on a day', () => {
+    const b = new DocBuilder();
+    b.block('annual', '2027-03-01', '2027-03-05', 'idea');
+    b.block('annual', '2027-03-03', '2027-03-10', 'idea');
+    expect(fullOfIdeas(b.doc, b.personId, '2027-03-01', '2027-03-12')).toEqual([]);
+    const third = b.block('annual', '2027-03-04', '2027-03-04', 'idea');
+    expect(fullOfIdeas(b.doc, b.personId, '2027-03-01', '2027-03-12')).toEqual(['2027-03-04']);
+    expect(fullOfIdeas(b.doc, b.personId, '2027-03-01', '2027-03-12', third.id)).toEqual([]); // editing one of them
+    expect(MAX_IDEAS_PER_DAY).toBe(3);
   });
 
   it('lets leave span office-closed days (BLK-6)', () => {

@@ -36,6 +36,9 @@ interface Selection {
 // Only office-closed days look like days off anyway; swap days are chosen and requested, so they look like leave.
 const FREE_TYPES: ReadonlySet<string> = new Set(['closed']);
 
+/** Outlines drawn per day; more would crowd into the number (the tooltip still lists every block). */
+const MAX_OUTLINES = 4;
+
 const STEPS: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
 /** A press becomes a drag only past this distance, so a trembling click stays one day. */
 const DRAG_PX = 10;
@@ -268,9 +271,11 @@ export function Calendar({ year, doc, personId, today, onCreate, onOpen }: Props
                 yearOf(d) !== year && 'out-of-year',
                 d === today && 'today',
                 d < today && 'past',
-                !firm && info.blocks.some((b) => !isFree(b)) && 'idea-only',
+                // Days off anyway (weekend, holiday, office closed) keep their own fill inside leave:
+                // the block's outline shows the range, the fill shows what each day is.
+                info.base === 'work' && !firm && info.blocks.some((b) => !isFree(b)) && 'idea-only',
                 selected && 'selected',
-                firm && (isFree(firm) ? 'free-block' : `fill-${firm.status}`),
+                firm && (isFree(firm) ? 'free-block' : info.base === 'work' && `fill-${firm.status}`),
                 me.top && 'm-top',
                 me.left && 'm-left',
               ];
@@ -296,7 +301,7 @@ export function Calendar({ year, doc, personId, today, onCreate, onOpen }: Props
                   <span className="num" aria-hidden="true">
                     {Number(d.slice(8))}
                   </span>
-                  {info.blocks.map((b, i) => {
+                  {info.blocks.slice(0, MAX_OUTLINES).map((b, i) => {
                     const e = outlineEdges(d, b.start, b.end);
                     return (
                       <span

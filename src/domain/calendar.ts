@@ -9,15 +9,15 @@ export interface DayInfo {
   /** What the calendar alone says, before any leave. */
   base: BaseKind;
   holiday?: Holiday;
-  /** This person's live blocks covering the day, highest status first, then oldest first. */
+  /** This person's live blocks covering the day, its owner first (`owner`: the reason for the day off, then status, then age). */
   blocks: Block[];
   /** Not a working day: weekend, holiday, or covered by a planned/approved block. */
   off: boolean;
-  /** Can start a bridge: a holiday, or a planned/approved floating, swap or office-closed day (DESIGN §6.3). */
+  /** Can start a bridge: a holiday, or a planned/approved swap or office-closed day (DESIGN §6.3). */
   anchor: boolean;
 }
 
-const ANCHOR_TYPES: ReadonlySet<LeaveTypeKey> = new Set(['floating', 'swap', 'closed']);
+const ANCHOR_TYPES: ReadonlySet<LeaveTypeKey> = new Set(['swap', 'closed']);
 
 /** Day-by-day view of one person's calendar from `from` to `to` (DESIGN §6.2). */
 export function buildDays(doc: PlanDoc, personId: string, from: ISODate, to: ISODate): Map<ISODate, DayInfo> {
@@ -29,9 +29,7 @@ export function buildDays(doc: PlanDoc, personId: string, from: ISODate, to: ISO
     days.set(date, { date, base, ...(holiday && { holiday }), blocks: [], off: base !== 'work', anchor: base === 'holiday' });
   }
 
-  const blocks = personBlocks(doc, personId).sort(
-    (a, b) => STATUS_RANK[b.status] - STATUS_RANK[a.status] || a.createdAt.localeCompare(b.createdAt),
-  );
+  const blocks = personBlocks(doc, personId).sort(owner(doc));
   for (const block of blocks) {
     if (!overlaps(block.start, block.end, from, to)) continue;
     const anchorType = ANCHOR_TYPES.has(doc.leaveTypes[block.typeId]?.key as LeaveTypeKey);
@@ -45,6 +43,27 @@ export function buildDays(doc: PlanDoc, personId: string, from: ISODate, to: ISO
     }
   }
   return days;
+}
+
+/**
+ * Which block owns a day that several cover (BLK-6; DESIGN §6.2): the reason for the day off
+ * comes first, so a planned or approved office-closed or swap day owns its day over an
+ * ordinary leave range around it, and is never charged to annual leave as well. Then the higher status, then the older block. Costs never depend on which block was
+ * entered first. Sorting by this puts the owner first in `DayInfo.blocks`.
+ */
+export function owner(doc: PlanDoc): (a: Block, b: Block) => number {
+  const reason = (b: Block) => (b.status !== 'idea' && ANCHOR_TYPES.has(doc.leaveTypes[b.typeId]?.key as LeaveTypeKey) ? 1 : 0);
+  return (a, b) => reason(b) - reason(a) || STATUS_RANK[b.status] - STATUS_RANK[a.status] || a.createdAt.localeCompare(b.createdAt);
+}
+
+/** At most this many ideas on any one day (BLK-5): more can't be told apart, on the calendar or in the head. */
+export const MAX_IDEAS_PER_DAY = 3;
+
+/** Days of `start`–`end` that already have MAX_IDEAS_PER_DAY ideas, not counting `exceptId`. */
+export function fullOfIdeas(doc: PlanDoc, personId: string, start: ISODate, end: ISODate, exceptId?: string): ISODate[] {
+  const ideas = personBlocks(doc, personId).filter((b) => b.status === 'idea' && b.id !== exceptId && overlaps(b.start, b.end, start, end));
+  if (ideas.length < MAX_IDEAS_PER_DAY) return [];
+  return daysBetween(start, end).filter((d) => ideas.filter((b) => b.start <= d && d <= b.end).length >= MAX_IDEAS_PER_DAY);
 }
 
 export function personBlocks(doc: PlanDoc, personId: string): Block[] {

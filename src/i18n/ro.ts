@@ -100,6 +100,8 @@ export const ro = {
   'editor.delete': 'Șterge',
   'editor.alsoHere': 'Tot în aceste zile:',
   'editor.overlap': 'Se suprapune cu alt concediu planificat sau aprobat. Schimbă perioada, sau păstrează-l ca idee.',
+  'editor.swapAdjacent': 'O zi compensatorie poate fi doar vinerea dinaintea sau lunea de după un weekend cu sărbătoare legală.',
+  'editor.tooManyIdeas': 'Pe {date} sunt deja {max} idei. Șterge una, sau alege alte zile.',
   'editor.deletedElsewhere': 'Concediul a fost șters pe alt dispozitiv. Dacă salvezi, revine.',
   'editor.unsaved': 'Ai modificări nesalvate.',
   'editor.discard': 'Renunță la ele',
