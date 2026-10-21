@@ -8,11 +8,12 @@ import {
   type MouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
-import { blockStats, type BlockStats } from '../domain/blocks';
-import { buildDays } from '../domain/calendar';
-import { addDays, maxDate, overlaps, yearOf, type ISODate } from '../domain/dates';
+import { blockStats } from '../domain/blocks';
+import { blockBudget, buildDays } from '../domain/calendar';
+import { addDays, overlaps, yearOf, type ISODate } from '../domain/dates';
 import { live, type Block, type PlanDoc } from '../domain/schema';
 import { useI18n } from '../i18n';
+import { describeBlock } from './describe';
 import { buildWeeks, clampDate, monthEdges, orderRange, outlineEdges, viewRange } from './calendarModel';
 import './calendar.css';
 
@@ -38,22 +39,28 @@ const STEPS: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -
  * Mount one per year (`key={year}`), so selection and focus start fresh.
  *
  * The year as one continuous list of Monday-to-Sunday weeks (CAL-1..7).
+ * A block's cost and break are not drawn on the calendar; they are the days' tooltip.
  *
  * Selecting days: drag with a mouse; or click/tap the first day, then the last
  * (works on touch, where a drag scrolls); or arrows + Shift+arrows + Enter.
  * Activating a day that already has leave opens that leave instead.
  */
 export function Calendar({ year, doc, personId, today, onCreate, onOpen }: Props) {
-  const { t, date: fmt, name } = useI18n();
+  const i18n = useI18n();
+  const { t, date: fmt, name } = i18n;
   const { from, to } = viewRange(year);
 
   const days = useMemo(() => buildDays(doc, personId, addDays(from, -40), addDays(to, 40)), [doc, personId, from, to]);
   const weeks = useMemo(() => buildWeeks(from, to, days), [from, to, days]);
-  const stats = useMemo(() => {
-    const out = new Map<string, BlockStats>();
-    for (const b of live(doc.blocks)) if (b.personId === personId && overlaps(b.start, b.end, from, to)) out.set(b.id, blockStats(days, b));
+  // What each block costs and gives, in words: the days' tooltip and screen-reader text (CAL-7).
+  const sentences = useMemo(() => {
+    const out = new Map<string, string>();
+    for (const b of live(doc.blocks)) {
+      if (b.personId !== personId || !overlaps(b.start, b.end, from, to)) continue;
+      out.set(b.id, describeBlock(i18n, blockStats(days, b), blockBudget(doc, b, yearOf(b.start))).sentence);
+    }
     return out;
-  }, [doc, personId, days, from, to]);
+  }, [doc, personId, days, from, to, i18n]);
 
   const [selection, setSelection] = useState<Selection | null>(null);
   const [pending, setPending] = useState<ISODate | null>(null);
@@ -180,11 +187,12 @@ export function Calendar({ year, doc, personId, today, onCreate, onOpen }: Props
               const firm = info.blocks.find((b) => b.status !== 'idea');
               const me = monthEdges(d);
               const selected = !!selection && d >= selStart && d <= selEnd;
-              const labelled = info.blocks.filter((b) => maxDate(b.start, from) === d);
               const describe = [
                 fmt(d, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
                 ...(info.holiday?.names.map(name) ?? []),
-                ...info.blocks.map((b) => `${name(doc.leaveTypes[b.typeId]!.name)}: ${t(`status.${b.status}`)}`),
+                ...info.blocks.map(
+                  (b) => `${name(doc.leaveTypes[b.typeId]!.name)} (${t(`status.${b.status}`)}): ${sentences.get(b.id) ?? ''}`,
+                ),
                 ...(d === today ? [t('calendar.today')] : []),
               ].join(', ');
               const classes = [
@@ -209,6 +217,12 @@ export function Calendar({ year, doc, personId, today, onCreate, onOpen }: Props
                   tabIndex={d === focusDate ? 0 : -1}
                   aria-selected={selected}
                   aria-label={describe}
+                  title={
+                    info.blocks
+                      .map((b) => sentences.get(b.id))
+                      .filter(Boolean)
+                      .join('\n') || undefined
+                  }
                   onPointerDown={(e) => onPointerDown(e, d)}
                   onPointerEnter={() => pending && setSelection({ anchor: pending, focus: d })}
                   onClick={(e) => onClick(e, d)}
@@ -225,22 +239,6 @@ export function Calendar({ year, doc, personId, today, onCreate, onOpen }: Props
                         style={{ '--c': typeColor(b), '--i': i } as CSSProperties}
                         aria-hidden="true"
                       />
-                    );
-                  })}
-                  {labelled.map((b) => {
-                    const s = stats.get(b.id);
-                    return (
-                      s && (
-                        <span
-                          key={b.id}
-                          className={`badge st-${b.status}`}
-                          title={t('calendar.costGainLong', { cost: s.cost, gain: s.gain })}
-                          aria-hidden="true"
-                        >
-                          {t('calendar.costGain', { cost: s.cost, gain: s.gain })}
-                          {b.status === 'approved' && ' ✓'}
-                        </span>
-                      )
                     );
                   })}
                 </div>

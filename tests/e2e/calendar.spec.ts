@@ -41,12 +41,13 @@ test('creates, approves and deletes leave (CAL-6..9, BLK-4)', async ({ page, isM
   await selectRange(page, isMobile, '2027-08-09', '2027-08-13');
   const dialog = page.getByRole('dialog', { name: 'Concediu nou' });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByTestId('editor-cost')).toHaveText('5 zile de concediu, 9 zile libere');
+  await expect(dialog.getByTestId('editor-cost')).toContainText('Folosești 5 zile de concediu');
+  await expect(dialog.getByTestId('editor-cost')).toContainText('→ ești liber 9 zile la rând:');
   await dialog.getByRole('radio', { name: 'Planificat' }).check();
   await dialog.getByRole('button', { name: 'Salvează' }).click();
   await expect(dialog).toBeHidden();
   await expect(cell(page, '2027-08-11')).toHaveClass(/fill-planned/);
-  await expect(cell(page, '2027-08-09').locator('.badge')).toHaveText('5 → 9');
+  await expect(cell(page, '2027-08-09')).toHaveAttribute('title', /Folosești 5 zile de concediu → ești liber 9 zile la rând/);
 
   await cell(page, '2027-08-10').click();
   const edit = page.getByRole('dialog', { name: 'Editează concediul' });
@@ -54,20 +55,21 @@ test('creates, approves and deletes leave (CAL-6..9, BLK-4)', async ({ page, isM
   await edit.getByRole('radio', { name: 'Aprobat' }).check();
   await edit.getByRole('button', { name: 'Salvează' }).click();
   await expect(cell(page, '2027-08-11')).toHaveClass(/fill-approved/);
-  await expect(cell(page, '2027-08-09').locator('.badge')).toHaveText('5 → 9 ✓');
+  await expect(cell(page, '2027-08-09').locator('.outline.st-approved')).toHaveCount(1);
 
   await cell(page, '2027-08-10').click();
   page.once('dialog', (d) => void d.accept());
   await page.getByRole('dialog', { name: 'Editează concediul' }).getByRole('button', { name: 'Șterge' }).click();
   await expect(cell(page, '2027-08-11')).not.toHaveClass(/fill-/);
-  await expect(cell(page, '2027-08-09').locator('.badge')).toHaveCount(0);
+  await expect(cell(page, '2027-08-09')).not.toHaveAttribute('title', /.+/);
 });
 
 test('an idea is outlined but not filled, and costs only uncovered days', async ({ page, isMobile }) => {
   await selectRange(page, isMobile, '2027-04-26', '2027-04-29');
   const dialog = page.getByRole('dialog', { name: 'Concediu nou' });
   // Good Friday 30 Apr, 1–2 May weekend, Easter Monday 3 May.
-  await expect(dialog.getByTestId('editor-cost')).toHaveText('4 zile de concediu, 10 zile libere');
+  await expect(dialog.getByTestId('editor-cost')).toContainText('Folosești 4 zile de concediu');
+  await expect(dialog.getByTestId('editor-cost')).toContainText('→ ești liber 10 zile la rând:');
   await dialog.getByRole('button', { name: 'Salvează' }).click(); // default status: idea
   await expect(cell(page, '2027-04-27')).not.toHaveClass(/fill-/);
   await expect(cell(page, '2027-04-27').locator('.outline.st-idea')).toHaveCount(1);

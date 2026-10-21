@@ -153,21 +153,21 @@
   border-left-width: 2px;
 }
 
-/* "cost → gain" label on the first day of a block (CAL-7). */
-.badge {
-  position: absolute;
-  top: 2px;
-  left: 3px;
-  z-index: 2;
-  padding: 0 3px;
-  font-size: 0.62rem;
-  line-height: 1.3;
-  white-space: nowrap;
-  border-radius: 3px;
-  background: var(--surface);
-  color: var(--fg);
-  box-shadow: 0 0 0 1px var(--line);
-  pointer-events: none;
+/* Approved: a thicker outline, so it differs from planned by more than colour (CAL-6). */
+.outline.st-approved.e-t {
+  border-top-width: 3px;
+}
+
+.outline.st-approved.e-r {
+  border-right-width: 3px;
+}
+
+.outline.st-approved.e-b {
+  border-bottom-width: 3px;
+}
+
+.outline.st-approved.e-l {
+  border-left-width: 3px;
 }
 
 /* Phone (NF-2): seven day columns; month name and notes get their own lines. */
