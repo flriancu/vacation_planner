@@ -1,0 +1,203 @@
+.cal-help {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.calendar {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* One week: month name | Mon..Sun | holiday notes (CAL-1, CAL-5). */
+.week {
+  display: grid;
+  grid-template-columns: 9.5rem repeat(7, minmax(2.6rem, 1fr)) minmax(8rem, 15rem);
+}
+
+.cal-head {
+  position: sticky;
+  top: 3.2rem;
+  z-index: 4;
+  background: var(--bg);
+}
+
+.weekday {
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--muted);
+  padding: 0.25rem 0;
+  text-transform: capitalize;
+}
+
+.month-col {
+  padding: 0.35rem 0.5rem 0 0;
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.month-name {
+  text-transform: capitalize;
+}
+
+.notes {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.1rem;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+/* Day kinds and fills (CAL-4, CAL-6); also used by the legend swatches. */
+.base-weekend {
+  background: var(--weekend);
+}
+
+.base-holiday {
+  background: var(--holiday);
+}
+
+.fill-planned {
+  background: color-mix(in srgb, var(--c) 35%, var(--surface));
+}
+
+.fill-approved {
+  background: color-mix(in srgb, var(--c) 80%, var(--surface));
+}
+
+.day {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 0.5px var(--line);
+  font-variant-numeric: tabular-nums;
+  outline: none;
+}
+
+.day:not(.base-weekend, .base-holiday, .fill-planned, .fill-approved) {
+  background: var(--surface);
+}
+
+.day.base-holiday .num {
+  font-weight: 700;
+}
+
+.day .num {
+  position: relative;
+  z-index: 1;
+  min-width: 1.6em;
+  text-align: center;
+}
+
+.day.out-of-year .num {
+  opacity: 0.55;
+}
+
+.day.today .num {
+  border-radius: 999px;
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.day.selected::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--selected);
+  pointer-events: none;
+}
+
+.day:focus-visible {
+  z-index: 3;
+  box-shadow: inset 0 0 0 2px var(--focus);
+}
+
+/* Stepped month separator (CAL-3). */
+.day.m-top {
+  border-top: 3px double var(--month-line);
+}
+
+.day.m-left {
+  border-left: 3px double var(--month-line);
+}
+
+/* Block outlines: one layer per block, edges only where the block ends (CAL-6). */
+.outline {
+  position: absolute;
+  inset: calc(var(--i, 0) * 3px);
+  border: 0 solid color-mix(in srgb, var(--c) 65%, var(--fg));
+  pointer-events: none;
+}
+
+.outline.st-idea {
+  border-style: dashed;
+}
+
+.outline.e-t {
+  border-top-width: 2px;
+}
+
+.outline.e-r {
+  border-right-width: 2px;
+}
+
+.outline.e-b {
+  border-bottom-width: 2px;
+}
+
+.outline.e-l {
+  border-left-width: 2px;
+}
+
+/* "cost → gain" label on the first day of a block (CAL-7). */
+.badge {
+  position: absolute;
+  top: 2px;
+  left: 3px;
+  z-index: 2;
+  padding: 0 3px;
+  font-size: 0.62rem;
+  line-height: 1.3;
+  white-space: nowrap;
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--fg);
+  box-shadow: 0 0 0 1px var(--line);
+  pointer-events: none;
+}
+
+/* Phone (NF-2): seven day columns; month name and notes get their own lines. */
+@media (max-width: 700px) {
+  .week {
+    grid-template-columns: repeat(7, 1fr);
+  }
+
+  .month-col {
+    grid-column: 1 / -1;
+    padding: 0.6rem 0.25rem 0.15rem;
+  }
+
+  .notes {
+    grid-column: 1 / -1;
+    padding: 0.1rem 0.25rem 0.3rem;
+  }
+
+  .month-col:empty,
+  .notes:empty,
+  .cal-head .month-col,
+  .cal-head .notes {
+    display: none;
+  }
+
+  .cal-head {
+    top: 5.6rem;
+  }
+
+  .day {
+    min-height: 2.6rem;
+  }
+}
