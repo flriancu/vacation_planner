@@ -65,11 +65,10 @@
   background-color: var(--leave);
 }
 
-/* Ideas only: sparse, low-contrast dots plus the dashed outline. Not stripes: high-contrast
-   stripes can cause pattern glare, and Google Calendar uses stripes for "declined". */
+/* Ideas only: the faintest step of the lightness ramp (idea < planned < approved), plus
+   the dashed outline. No pattern: dots or stripes behind the number make it harder to read. */
 .idea-only {
-  background-image: radial-gradient(circle, color-mix(in srgb, var(--c) 45%, transparent) 1.3px, transparent 1.8px);
-  background-size: 8px 8px;
+  background-color: color-mix(in srgb, var(--leave) 9%, var(--surface));
 }
 
 .day {
@@ -84,7 +83,7 @@
   outline: none;
 }
 
-.day:not(.base-weekend, .base-holiday, .free-block, .fill-planned, .fill-approved) {
+.day:not(.base-weekend, .base-holiday, .free-block, .idea-only, .fill-planned, .fill-approved) {
   background-color: var(--surface);
 }
 
@@ -120,7 +119,6 @@
 
 .day.out-of-year .num {
   color: var(--muted);
-  font-style: italic;
 }
 
 .day.fill-approved .num {

@@ -17,7 +17,7 @@ export function Legend() {
       <li className="legend-group">{t('legend.leave')}</li>
       {(['idea', 'planned', 'approved'] as const).map((s) => (
         <li key={s}>
-          <span className={`swatch ${s === 'idea' ? 'fill-none idea-only' : `fill-${s}`}`} style={LEAVE}>
+          <span className={`swatch ${s === 'idea' ? 'idea-only' : `fill-${s}`}`} style={LEAVE}>
             <span className={`outline st-${s} e-t e-r e-b e-l`} style={LEAVE} />
           </span>{' '}
           {t(`status.${s}`)}
