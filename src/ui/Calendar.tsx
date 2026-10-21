@@ -33,7 +33,8 @@ interface Selection {
   focus: ISODate;
 }
 
-const FREE_TYPES: ReadonlySet<string> = new Set(['swap', 'closed']);
+// Only office-closed days look like days off anyway; swap days are chosen and requested, so they look like leave.
+const FREE_TYPES: ReadonlySet<string> = new Set(['closed']);
 
 const STEPS: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
 
@@ -151,8 +152,8 @@ export function Calendar({ year, doc, personId, today, onCreate, onOpen }: Props
   };
 
   const [selStart, selEnd] = selection ? orderRange(selection.anchor, selection.focus) : ['', ''];
-  // A day off is a day off: one accent for all leave; swap and office-closed days look like
-  // any other day off anyway, with a neutral outline (theme.css).
+  // A day off is a day off: one accent for all leave (swap days included); office-closed days
+  // look like any other day off anyway, with a neutral outline (theme.css).
   const isFree = (b: Block) => FREE_TYPES.has(doc.leaveTypes[b.typeId]?.key ?? '');
   const typeColor = (b: Block) => (isFree(b) ? 'var(--muted)' : 'var(--leave)');
 

@@ -2,8 +2,8 @@
  * Colour schemes (CAL-4). <html data-scheme="roz|neutru|contrast" data-mode="light|dark">;
  * index.html sets both before first paint, ui/theme.ts keeps them in sync.
  *
- * Two colours per scheme: one tint for days off anyway (weekend, holiday, swap, office
- * closed) and one accent for all leave you take, whatever its type. What matters is the
+ * Two colours per scheme: one tint for days off anyway (weekend, holiday, office closed)
+ * and one accent for all leave you take, whatever its type (swap days included). What matters is the
  * status: idea = hatch + dashed outline, planned = light fill + outline, approved = full
  * accent + thick outline. Holidays also get a dot.
  */

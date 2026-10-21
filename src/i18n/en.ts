@@ -30,7 +30,7 @@ export const en: Record<MessageKey, string> = {
   'mode.auto': 'Automatic',
   'mode.light': 'Light',
   'mode.dark': 'Dark',
-  'legend.free': 'Off anyway: weekend, office closed, swap day',
+  'legend.free': 'Off anyway: weekend, office closed',
   'legend.leave': 'Your leave:',
   'legend.holiday': 'Public holiday',
   'status.idea': 'Idea',

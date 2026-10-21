@@ -28,7 +28,7 @@ export const ro = {
   'mode.auto': 'Automat',
   'mode.light': 'Luminos',
   'mode.dark': 'Întunecat',
-  'legend.free': 'Liber oricum: weekend, birou închis, zi compensatorie',
+  'legend.free': 'Liber oricum: weekend, birou închis',
   'legend.leave': 'Concediul tău:',
   'legend.holiday': 'Sărbătoare legală',
   'status.idea': 'Idee',

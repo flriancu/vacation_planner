@@ -126,7 +126,7 @@ export const BUILTIN_TYPES: readonly Omit<LeaveType, keyof Meta>[] = [
   { key: 'annual', name: { ro: 'Concediu de odihnă', en: 'Annual leave' }, color: '#e05a9a', budget: 'annual', needsApproval: true },
   { key: 'floating', name: { ro: 'Zi flotantă', en: 'Floating day' }, color: '#ffbdda', budget: 'floating', needsApproval: false },
   { key: 'excused', name: { ro: 'Învoire', en: 'Excused leave' }, color: '#f7c6dc', budget: 'excused', needsApproval: true },
-  { key: 'swap', name: { ro: 'Zi compensatorie', en: 'Swap day' }, color: '#ff96c4', budget: 'none', needsApproval: false },
+  { key: 'swap', name: { ro: 'Zi compensatorie', en: 'Swap day' }, color: '#ff96c4', budget: 'none', needsApproval: true },
   {
     key: 'closed',
     name: { ro: 'Birou închis', en: 'Office closed' },
