@@ -1,12 +1,18 @@
 import { Component, type ReactNode } from 'react';
+import { forgetSavedCopies } from '../sync/Replica';
 
-/** Forgets this tab's Google session (google/auth.ts) and starts over. */
+/**
+ * Signs out as Root does, without React: forgets this tab's Google session, the account hint
+ * and this device's copies of plans, except a copy that still holds unsaved changes.
+ */
 function signOut() {
   try {
     sessionStorage.removeItem('vacation-planner.session');
+    localStorage.removeItem('vacation-planner.account');
   } catch {
     // nothing kept
   }
+  forgetSavedCopies();
   location.reload();
 }
 

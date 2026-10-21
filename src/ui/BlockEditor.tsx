@@ -93,15 +93,24 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
   }, [doc, personId, target, draft, type.key, valid, i18n]);
 
   // BLK-5: planned and approved leave can't overlap other planned or approved leave; ideas can.
-  const blocked = !!preview?.overlap && draft.status !== 'idea';
+  // The rules hold for what I change here: a block that already breaks one (from an older
+  // version, a merge or an undo) can still get a note, but not new dates, status or type.
+  const touched =
+    !original ||
+    original.deleted === true ||
+    original.start !== draft.start ||
+    original.end !== draft.end ||
+    original.status !== draft.status ||
+    original.typeId !== draft.typeId;
+  const blocked = touched && !!preview?.overlap && draft.status !== 'idea';
   // ...and no day holds more than MAX_IDEAS_PER_DAY ideas.
-  const crowded = draft.status === 'idea' && valid ? fullOfIdeas(doc, personId, draft.start, draft.end, original?.id) : [];
+  const crowded = touched && draft.status === 'idea' && valid ? fullOfIdeas(doc, personId, draft.start, draft.end, original?.id) : [];
 
   // DAY-4: a swap day is one working day, the Friday just before or the Monday just after a
   // weekend with a legal holiday; it stands for that holiday. The one chosen, else the first that
   // no other swap day stands for yet.
   const swapHolidays = type.key === 'swap' && valid && draft.start === draft.end ? swapHolidaysFor(doc, draft.start) : [];
-  const misplacedSwap = type.key === 'swap' && valid && swapHolidays.length === 0;
+  const misplacedSwap = touched && type.key === 'swap' && valid && swapHolidays.length === 0;
   const taken = new Set(
     live(doc.blocks)
       .filter((b) => b.personId === personId && b.id !== original?.id && b.status !== 'idea' && b.swapFor)
@@ -134,7 +143,7 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (cannotSave) return;
-    onSave({ ...draft, swapFor: type.key === 'swap' ? swapFor : undefined });
+    onSave({ ...draft, swapFor: type.key !== 'swap' ? undefined : touched ? swapFor : original?.swapFor });
   };
 
   /** Leaves the editor through `then`, asking first if there are unsaved changes. */

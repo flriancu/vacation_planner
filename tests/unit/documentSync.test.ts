@@ -31,11 +31,9 @@ class MapStore {
 const OWNER = 'sub-1';
 const ctx = testContext();
 const init = () => newPlanDoc({ googleSub: OWNER, personName: 'Me' }, ctx).doc;
-let ids = 0;
-const newId = () => `new-${++ids}`;
 
 function sync(storage: MemoryStorage, extra: Partial<SyncOptions> = {}) {
-  return new DocumentSync({ storage, init, owner: OWNER, newId, saveDelayMs: 1500, ...extra });
+  return new DocumentSync({ storage, init, owner: OWNER, saveDelayMs: 1500, ...extra });
 }
 
 /** Adds a planned annual-leave block, the way the editor does. */
@@ -75,7 +73,7 @@ describe('DocumentSync', () => {
   it('keeps an edit made right before the page died, and saves it on the next open', async () => {
     const storage = new TestStorage();
     const store = new MapStore();
-    const replica = () => new LocalReplica('r', store);
+    const replica = () => new LocalReplica('r', undefined, store);
     const first = sync(storage, { replica: replica() });
     await first.open();
     addBlock(first, '2027-03-01'); // and the tab is closed 300 ms later: no save ever runs
@@ -131,7 +129,7 @@ describe('DocumentSync', () => {
   it('repairs an edit lost to two devices writing at the same moment', async () => {
     const storage = new TestStorage();
     const store = new MapStore();
-    const phone = sync(storage, { replica: new LocalReplica('phone', store) });
+    const phone = sync(storage, { replica: new LocalReplica('phone', undefined, store) });
     const laptop = sync(storage);
     await phone.open();
     await laptop.open();
@@ -208,7 +206,7 @@ describe('DocumentSync', () => {
   it('carries the demo plan into mine once, and says so', async () => {
     const storage = new TestStorage();
     const demo = new MemoryStorage();
-    const d = new DocumentSync({ storage: demo, init, newId });
+    const d = new DocumentSync({ storage: demo, init });
     await d.open();
     addBlock(d, '2027-07-01', 'beach');
     await d.close();
@@ -234,5 +232,131 @@ describe('DocumentSync', () => {
     expect(await t.close()).toBe(false);
     await vi.advanceTimersByTimeAsync(120_000);
     expect(storage.saves).toBe(2); // closed: no retries behind the user's back
+  });
+});
+
+/** The plan as storage has it now. */
+async function storedDoc(storage: MemoryStorage) {
+  const [ref] = await storage.listCalendars();
+  return (await storage.load(ref!.calendarId)).doc;
+}
+
+/** A plan file another device created on its own, with its own ids, holding one planned day. */
+function otherDevicesPlan(start: string): PlanDoc {
+  const doc = init();
+  const personId = live(doc.people)[0]!.id;
+  return addRecord(doc, 'blocks', { personId, typeId: typeByKey(doc, 'annual')!.id, start, end: start, status: 'planned' }, ctx).doc;
+}
+
+describe('DocumentSync: plans made with other ids, and files that go away', () => {
+  it('adds a duplicate plan file with its own ids as one person and one set of leave types', async () => {
+    const storage = new TestStorage();
+    await storage.create(otherDevicesPlan('2027-11-08'));
+    await storage.create(otherDevicesPlan('2027-12-07'));
+    const s = sync(storage);
+    await s.open();
+    await vi.advanceTimersByTimeAsync(0);
+    const doc = await storedDoc(storage);
+    const me = live(doc.people);
+    expect(me).toHaveLength(1);
+    expect(live(doc.leaveTypes).filter((t) => t.key === 'annual')).toHaveLength(1);
+    // Both days are mine, of my annual-leave type: visible on every device.
+    expect(
+      live(doc.blocks)
+        .map((b) => [b.start, b.personId, b.typeId])
+        .sort(),
+    ).toEqual([
+      ['2027-11-08', me[0]!.id, typeByKey(doc, 'annual')!.id],
+      ['2027-12-07', me[0]!.id, typeByKey(doc, 'annual')!.id],
+    ]);
+    expect(await storage.listCalendars()).toHaveLength(1);
+  });
+
+  it('opens the plan even when a duplicate file cannot be read, and leaves that file alone', async () => {
+    const storage = new (class extends TestStorage {
+      override async load(id: string) {
+        if (id === 'memory-2') throw new Error('not JSON');
+        return super.load(id);
+      }
+    })();
+    await storage.create(otherDevicesPlan('2027-11-08'));
+    await storage.create(otherDevicesPlan('2027-12-07'));
+    const s = sync(storage);
+    await s.open();
+    expect(s.getSnapshot().loadError).toBeNull();
+    expect(live(s.getSnapshot().doc!.blocks).map((b) => b.start)).toEqual(['2027-11-08']);
+    expect(await storage.listCalendars()).toHaveLength(2);
+  });
+
+  it('starts a really new plan: the old plan on this device stays out of it', async () => {
+    const storage = new TestStorage();
+    const store = new MapStore();
+    const old = sync(storage, { replica: new LocalReplica('r', undefined, store) });
+    await old.open();
+    addBlock(old, '2027-03-01', 'old private note');
+    await old.flush();
+    await storage.remove((await storage.listCalendars())[0]!.calendarId);
+
+    const s = sync(storage, { replica: new LocalReplica('r', undefined, store) });
+    await s.open();
+    expect(s.getSnapshot().loadError).toBeInstanceOf(PlanRemovedError);
+    await s.open(true);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(live(s.getSnapshot().doc!.blocks)).toEqual([]);
+    expect(JSON.stringify(await storedDoc(storage))).not.toContain('old private note');
+    expect(store.items.size).toBe(1); // a fresh copy of the new plan only
+    expect(store.items.values().next().value).not.toContain('old private note');
+  });
+
+  it('when its file goes away (merged into an older one), finds the plan again and adds its changes', async () => {
+    const storage = new TestStorage();
+    const b = sync(storage, { replica: new LocalReplica('b', undefined, new MapStore()) });
+    await b.open();
+    const bFile = (await storage.listCalendars())[0]!.calendarId;
+    // Meanwhile another device's plan is the one that counts, and B's file goes to the trash.
+    await storage.create(otherDevicesPlan('2027-11-08'));
+    await storage.remove(bFile);
+    const gone = Object.assign(new Error('trashed'), { fileGone: true });
+    storage.failSaves = [gone];
+    addBlock(b, '2027-12-07');
+    await vi.advanceTimersByTimeAsync(1500); // the save meets the trashed file; the plan is looked up again
+    await vi.advanceTimersByTimeAsync(100); // and the merged plan is saved
+    expect(b.getSnapshot().loadError).toBeNull();
+    expect((await storedBlocks(storage)).sort()).toEqual(['2027-11-08', '2027-12-07']);
+  });
+
+  it('signs out after at most a few seconds when Drive does not answer', async () => {
+    const storage = new (class extends TestStorage {
+      hang = false;
+      override save(calendarId: string, doc: PlanDoc, base: string) {
+        return this.hang ? new Promise<SaveResult>(() => {}) : super.save(calendarId, doc, base);
+      }
+    })();
+    const s = sync(storage, { closeWaitMs: 5000 });
+    await s.open();
+    storage.hang = true;
+    addBlock(s, '2027-03-01');
+    let done: boolean | undefined;
+    void s.close().then((clean) => (done = clean));
+    await vi.advanceTimersByTimeAsync(4999);
+    expect(done).toBeUndefined();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(done).toBe(false); // not saved: the device's copy keeps it
+  });
+
+  it('tries opening again by itself after a passing failure, as the message says', async () => {
+    const storage = new (class extends TestStorage {
+      failLists = 1;
+      override async listCalendars() {
+        if (this.failLists-- > 0) throw Object.assign(new Error('503'), { retryable: true });
+        return super.listCalendars();
+      }
+    })();
+    const s = sync(storage);
+    await s.open();
+    expect(s.getSnapshot().loadError).not.toBeNull();
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(s.getSnapshot().loadError).toBeNull();
+    expect(s.getSnapshot().doc).not.toBeNull();
   });
 });

@@ -14,6 +14,7 @@ export function errorMessage(e: unknown): MessageKey {
   if (e instanceof SaveConflictError) return 'err.conflict';
   if (e instanceof DriveError) {
     if (e.status === 0) return 'err.network';
+    if (e.rateLimited) return 'err.google';
     if (e.status === 403) return 'err.forbidden';
     if (e.status === 413) return 'err.tooBig';
     if (e.status === 404) return 'err.missing';

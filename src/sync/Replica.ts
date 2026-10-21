@@ -16,15 +16,26 @@ export interface ReplicaStore {
   clear(): void;
 }
 
+/** Whose copy it is, so a signed-out page can say which account has changes waiting. */
+export interface ReplicaAccount {
+  sub: string;
+  email: string;
+  name: string;
+}
+
 interface Stored {
   unsaved: boolean;
   doc: unknown;
+  account?: ReplicaAccount;
 }
+
+const PREFIX = 'vacation-planner.replica.';
 
 /** The copy in localStorage, one per Google account, shared by the tabs of this browser. */
 export class LocalReplica implements ReplicaStore {
   constructor(
     private readonly key: string,
+    private readonly account?: ReplicaAccount,
     private readonly store: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | null = safeLocalStorage(),
   ) {}
 
@@ -39,7 +50,8 @@ export class LocalReplica implements ReplicaStore {
     // Still unsaved if this change is, or if the copy held something (another tab's) that `doc` lacks.
     const stillUnsaved = unsaved || (!!before?.unsaved && hasLocalWins(before.doc, doc));
     try {
-      this.store?.setItem(this.key, JSON.stringify({ unsaved: stillUnsaved, doc: toFile(merged) } satisfies Stored));
+      const stored: Stored = { unsaved: stillUnsaved, doc: toFile(merged), ...(this.account && { account: this.account }) };
+      this.store?.setItem(this.key, JSON.stringify(stored));
     } catch {
       // storage full or blocked: Drive is still the copy that counts
     }
@@ -70,7 +82,43 @@ export class LocalReplica implements ReplicaStore {
 }
 
 /** The replica key for a Google account. */
-export const replicaKey = (sub: string) => `vacation-planner.replica.${sub}`;
+export const replicaKey = (sub: string) => `${PREFIX}${sub}`;
+
+/**
+ * Every account with changes on this device that haven't reached Drive (a shared computer can
+ * hold more than one): signed out, the page offers to sign in as them, so nothing is orphaned.
+ */
+export function unsavedCopies(store: globalThis.Storage | null = safeLocalStorage()): ReplicaAccount[] {
+  const out: ReplicaAccount[] = [];
+  if (!store) return out;
+  try {
+    for (let i = 0; i < store.length; i++) {
+      const key = store.key(i);
+      if (!key?.startsWith(PREFIX)) continue;
+      const value = JSON.parse(store.getItem(key) ?? 'null') as Partial<Stored> | null;
+      const a = value?.account;
+      if (value?.unsaved === true && a && typeof a.email === 'string' && typeof a.name === 'string') {
+        out.push({ sub: key.slice(PREFIX.length), email: a.email, name: a.name });
+      }
+    }
+  } catch {
+    // unreadable storage: nothing to offer
+  }
+  return out;
+}
+
+/** Deletes the copies that hold nothing unsaved (a sign-out from the error screen). */
+export function forgetSavedCopies(store: globalThis.Storage | null = safeLocalStorage()) {
+  try {
+    const keys = Array.from({ length: store?.length ?? 0 }, (_, i) => store!.key(i)).filter((k): k is string => !!k?.startsWith(PREFIX));
+    for (const key of keys) {
+      const value = JSON.parse(store!.getItem(key) ?? 'null') as Partial<Stored> | null;
+      if (value?.unsaved !== true) store!.removeItem(key);
+    }
+  } catch {
+    // nothing to forget
+  }
+}
 
 function safeLocalStorage(): Storage | null {
   try {

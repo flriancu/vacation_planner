@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { absorb } from '../../src/domain/absorb';
 import { nextStamp } from '../../src/domain/clock';
 import { deleteRecord, restoreRecord, updateRecord } from '../../src/domain/edit';
 import { holidaysBetween } from '../../src/domain/holidays';
@@ -172,5 +173,67 @@ describe('floating days are gone', () => {
     expect(doc.leaveTypes.old).toBeUndefined();
     expect(doc.leaveTypes[doc.blocks[blockId]!.typeId]!.key).toBe('annual');
     expect(skippedCount(doc)).toBe(0);
+  });
+});
+
+describe('timestamps a merge can trust', () => {
+  const NOW = Date.UTC(2026, 9, 22);
+
+  it('turns a stamp far in the future into 1970, so it cannot win every merge', () => {
+    const { raw, blockId } = file((doc) => (blocks(doc)[Object.keys(blocks(doc)).at(-1)!]!.updatedAt = '9999-12-31T23:59:59.999Z'));
+    const doc = migrate(raw, NOW);
+    expect(doc.blocks[blockId]!.updatedAt).toBe('1970-01-01T00:00:00.000Z');
+    expect(nextStamp(doc, NOW)).toBe(new Date(NOW).toISOString());
+  });
+
+  it('keeps a clock a few hours fast, and writes every stamp in UTC', () => {
+    const { raw, blockId } = file((doc) => (blocks(doc)[Object.keys(blocks(doc)).at(-1)!]!.updatedAt = '2026-10-22T09:28:42+14:00'));
+    expect(migrate(raw, NOW).blocks[blockId]!.updatedAt).toBe('2026-10-21T19:28:42.000Z');
+  });
+});
+
+describe('an old floating block when the annual-leave type is gone too', () => {
+  it('brings the annual type back and keeps the block visible', () => {
+    const { raw, blockId } = file((doc) => {
+      const types = doc.leaveTypes as Record<string, Record<string, unknown>>;
+      for (const t of Object.values(types)) if (t.key === 'annual') t.deleted = true;
+      types.old = {
+        id: 'old',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+        key: 'floating',
+        name: { ro: 'Z', en: 'F' },
+        color: '#fff',
+        budget: 'floating',
+        needsApproval: false,
+      };
+      blocks(doc)[Object.keys(blocks(doc)).at(-1)!]!.typeId = 'old';
+    });
+    const doc = migrate(raw);
+    expect(skippedCount(doc)).toBe(0);
+    expect(doc.leaveTypes[doc.blocks[blockId]!.typeId]!.key).toBe('annual');
+  });
+});
+
+describe('absorb', () => {
+  it('is merge for two versions of the same file', () => {
+    const b = new DocBuilder();
+    const block = b.block('annual', '2027-03-01');
+    const mine = updateRecord(b.doc, 'blocks', block.id, { note: 'mine' }, '2027-01-01T11:00:00.000Z');
+    expect(absorb(b.doc, mine)).toEqual(merge(mine, b.doc));
+  });
+
+  it("keeps my settings when taking in the demo's blocks", () => {
+    const mine = new DocBuilder();
+    const demo = new DocBuilder();
+    demo.block('annual', '2027-07-01');
+    const fromDemo = {
+      ...demo.doc,
+      owner: { googleSub: 'demo' },
+      settings: { lang: 'en' as const, updatedAt: '2030-01-01T00:00:00.000Z' },
+    };
+    const out = absorb(mine.doc, fromDemo);
+    expect(out.settings.lang).toBe('ro');
+    expect(live(out.blocks).map((x) => x.personId)).toEqual([mine.personId]);
   });
 });

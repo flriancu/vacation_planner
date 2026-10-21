@@ -3,7 +3,7 @@ import { DRIVE_FILE_SCOPE, GOOGLE_CLIENT_ID, GOOGLE_SCOPES } from '../config';
 import { GoogleAuth, SignInError, type Session } from '../google/auth';
 import { DriveStorage } from '../storage/DriveStorage';
 import { MemoryStorage } from '../storage/MemoryStorage';
-import { LocalReplica, replicaKey } from '../sync/Replica';
+import { LocalReplica, replicaKey, unsavedCopies } from '../sync/Replica';
 import type { Account, AccountHint } from './account';
 import { App } from './App';
 
@@ -33,6 +33,9 @@ function writeHint(hint: AccountHint | null) {
   }
 }
 
+/** "Continuă ca Florin" must fit in the header. */
+const firstName = (u: { name: string; email: string }) => u.name.split(' ')[0] || u.email;
+
 function describe(e: unknown): string {
   if (e instanceof SignInError) return e.reason;
   return e instanceof Error ? e.message : String(e);
@@ -54,8 +57,26 @@ export function Root() {
   const carryDemo = useRef(false);
   const sub = session?.user.sub;
   const drive = useMemo(() => (sub ? new DriveStorage(() => auth.accessToken()) : null), [sub]);
-  const replica = useMemo(() => (sub ? new LocalReplica(replicaKey(sub)) : null), [sub]);
-  const unsavedOnDevice = useMemo(() => !sub && !!hint?.sub && new LocalReplica(replicaKey(hint.sub)).hasUnsaved(), [sub, hint]);
+  const replica = useMemo(
+    () =>
+      session
+        ? new LocalReplica(replicaKey(session.user.sub), {
+            sub: session.user.sub,
+            email: session.user.email,
+            name: firstName(session.user),
+          })
+        : null,
+    // one copy per account; the session object changes on every reconnect
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+    [sub],
+  );
+  // Signed out: an account whose changes on this device haven't reached Drive comes first, so
+  // "Continue as …" leads straight to saving them (another person's, on a shared computer, too).
+  const waiting = useMemo(() => (sub ? undefined : (unsavedCopies().find((a) => a.sub === hint?.sub) ?? unsavedCopies()[0])), [sub, hint]);
+  const offered = useMemo<AccountHint | null>(
+    () => (waiting ? { email: waiting.email, name: waiting.name, sub: waiting.sub } : hint),
+    [waiting, hint],
+  );
 
   useEffect(() => void auth.preload(), []);
 
@@ -64,9 +85,9 @@ export function Root() {
       setBusy(true);
       setError(null);
       auth
-        .signIn(otherAccount ? undefined : hint?.email)
+        .signIn(otherAccount ? undefined : offered?.email)
         .then((s) => {
-          const next = { email: s.user.email, name: s.user.name.split(' ')[0] || s.user.email, sub: s.user.sub };
+          const next = { email: s.user.email, name: firstName(s.user), sub: s.user.sub };
           writeHint(next);
           setHint(next);
           carryDemo.current = true;
@@ -75,7 +96,7 @@ export function Root() {
         .catch((e: unknown) => setError(describe(e)))
         .finally(() => setBusy(false));
     },
-    [hint],
+    [offered],
   );
 
   const reconnect = useCallback(
@@ -116,7 +137,7 @@ export function Root() {
 
   const account: Account = session
     ? { kind: 'google', sub: session.user.sub, name: session.user.name, email: session.user.email, reconnect, signOut }
-    : { kind: 'demo', hint, unsavedOnDevice, busy, error, signIn };
+    : { kind: 'demo', hint: offered, unsavedOnDevice: !!waiting, busy, error, signIn };
 
   return drive ? (
     <App key={sub} storage={drive} account={account} replica={replica ?? undefined} carry={takeDemo} />

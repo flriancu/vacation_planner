@@ -146,6 +146,33 @@ describe('DriveStorage', () => {
     await expect(storage().save('f1', new DocBuilder().doc, '6')).rejects.toBeInstanceOf(DriveError);
   });
 
+  it('retries Google rate limits (403 with a rate-limit reason), not other refusals', async () => {
+    fakeDrive([[/.*/, () => ({ status: 403, text: '{"error":{"errors":[{"reason":"userRateLimitExceeded"}]}}' })]]);
+    expect(
+      (
+        (await storage()
+          .version('f1')
+          .catch((e: unknown) => e)) as DriveError
+      ).retryable,
+    ).toBe(true);
+    fakeDrive([[/.*/, () => ({ status: 403, text: '{"error":{"errors":[{"reason":"storageQuotaExceeded"}]}}' })]]);
+    expect(
+      (
+        (await storage()
+          .version('f1')
+          .catch((e: unknown) => e)) as DriveError
+      ).retryable,
+    ).toBe(false);
+  });
+
+  it('reports content that is not JSON as a damaged plan file, not as a Drive problem', async () => {
+    fakeDrive([
+      [/fields=version,trashed$/, () => ({ json: { version: '5' } })],
+      [/alt=media$/, () => ({ text: 'garbage' })],
+    ]);
+    await expect(storage().load('f1')).rejects.toBeInstanceOf(UnsupportedPlanError);
+  });
+
   it('turns 401 into AuthExpiredError, and passes through an error from the token getter', async () => {
     fakeDrive([[/.*/, () => ({ status: 401, text: 'expired' })]]);
     await expect(storage().listCalendars()).rejects.toBeInstanceOf(AuthExpiredError);

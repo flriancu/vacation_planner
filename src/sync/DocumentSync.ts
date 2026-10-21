@@ -1,8 +1,8 @@
-import { carryBlocks } from '../domain/carry';
+import { absorb } from '../domain/absorb';
 import { hasLocalWins, merge } from '../domain/merge';
 import { skippedCount } from '../domain/migrate';
-import type { PlanDoc } from '../domain/schema';
-import { isRetryable, needsSignIn, type Storage } from '../storage/Storage';
+import { live, type PlanDoc } from '../domain/schema';
+import { fileGone, isRetryable, needsSignIn, type Storage } from '../storage/Storage';
 import type { ReplicaStore } from './Replica';
 import { retryDelay } from './retry';
 
@@ -29,9 +29,10 @@ export interface SyncOptions {
   replica?: ReplicaStore;
   /** A plan whose blocks are added to mine once it is open (the demo, at sign-in). */
   carry?: () => PlanDoc | null;
-  newId: () => string;
   /** Debounce before saving (NF-4). */
   saveDelayMs?: number;
+  /** How long `close` waits for a last save before giving up on it (sign-out must not hang). */
+  closeWaitMs?: number;
 }
 
 /** No plan file, but one in the Drive trash: restore it, or start a new one on purpose. */
@@ -76,6 +77,8 @@ export class DocumentSync {
   private queue: Promise<unknown> = Promise.resolve();
   private timer: ReturnType<typeof setTimeout> | undefined;
   private attempts = 0;
+  private loadAttempts = 0;
+  private loadTimer: ReturnType<typeof setTimeout> | undefined;
   private closed = false;
 
   constructor(private readonly options: SyncOptions) {}
@@ -95,12 +98,20 @@ export class DocumentSync {
   /** Opens my plan; idempotent. `startNew` creates a new plan even if one is in the trash. */
   open(startNew = false): Promise<void> {
     this.closed = false;
+    clearTimeout(this.loadTimer);
     if (this.opening && !startNew) return this.opening;
     this.set({ loadError: null });
-    this.opening = this.enqueue(() => this.openOwn(startNew)).catch((e: unknown) => {
-      this.opening = null;
-      this.set({ loadError: e });
-    });
+    this.opening = this.enqueue(() => this.openOwn(startNew)).then(
+      () => {
+        this.loadAttempts = 0;
+      },
+      (e: unknown) => {
+        this.opening = null;
+        this.set({ loadError: e });
+        // What the message promises: a passing problem is tried again, with growing delays.
+        if (isRetryable(e) && !this.closed) this.loadTimer = setTimeout(() => void this.open(), retryDelay(this.loadAttempts++));
+      },
+    );
     return this.opening;
   }
 
@@ -136,16 +147,26 @@ export class DocumentSync {
       this.set({ doc: this.current });
       if (this.dirty) this.schedule(0);
     }).catch((e: unknown) => {
-      if (needsSignIn(e)) this.set({ saveState: 'signin' });
+      if (fileGone(e)) this.reopen();
+      else if (needsSignIn(e)) this.set({ saveState: 'signin' });
       // otherwise: a missed refresh is harmless, the next save merges anyway
     });
 
-  /** Saves what's left and stops retrying (sign-out, unmount). Resolves true when nothing is left unsaved. */
+  /**
+   * Stops retrying and makes one last save (sign-out, unmount), waiting for it at most
+   * `closeWaitMs`: a Drive that doesn't answer must not keep someone signed in. Resolves true
+   * when nothing is left unsaved (otherwise this device's copy keeps it).
+   */
   async close(): Promise<boolean> {
-    clearTimeout(this.timer);
-    if (this.dirty) await this.flush();
     this.closed = true;
     clearTimeout(this.timer);
+    clearTimeout(this.loadTimer);
+    if (this.dirty) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const wait = new Promise<void>((resolve) => (timer = setTimeout(resolve, this.options.closeWaitMs ?? 5000)));
+      await Promise.race([this.flush(), wait]);
+      clearTimeout(timer);
+    }
     return !this.dirty;
   }
 
@@ -155,34 +176,49 @@ export class DocumentSync {
 
   private async openOwn(startNew: boolean) {
     const { storage, owner, replica, carry } = this.options;
+    // What this tab had open before (a reopen after its file went away) is kept and merged in.
+    const before = startNew ? null : this.current;
     const refs = await storage.listCalendars();
     let doc: PlanDoc;
+    let duplicates: PlanDoc[] = [];
+    this.duplicates = [];
     if (refs.length === 0) {
       if (!startNew && (await storage.listRemoved()).length > 0) throw new PlanRemovedError();
       doc = this.options.init();
       ({ calendarId: this.calendarId, version: this.version } = await storage.create(doc));
     } else {
-      // The oldest file is the plan; any others (two devices creating one at once) merge into it.
+      // The oldest file is the plan; any others (two devices creating one at once) are added to
+      // it and then moved to the trash. One that can't be read is left alone: it must not keep
+      // the plan from opening.
       const [first, ...others] = refs;
       ({ doc, version: this.version } = await storage.load(first!.calendarId));
       this.calendarId = first!.calendarId;
-      this.duplicates = others.map((r) => r.calendarId);
+      for (const other of others) {
+        const loaded = await storage.load(other.calendarId).catch(() => null);
+        if (!loaded) continue;
+        duplicates.push(loaded.doc);
+        this.duplicates.push(other.calendarId);
+      }
     }
     if (owner && doc.owner.googleSub !== owner) throw new OtherOwnerError();
     this.saved = doc;
 
     let current = doc;
-    for (const id of this.duplicates) current = merge((await storage.load(id)).doc, current);
-    const kept = replica?.read();
-    if (kept && kept.owner.googleSub === doc.owner.googleSub) current = merge(kept, current);
+    for (const d of duplicates) current = absorb(current, d);
+    // "Start a new plan" means new: the old plan's copy on this device goes, not into the new one.
+    if (startNew) replica?.clear();
+    const kept = startNew ? null : replica?.read();
+    if (kept && kept.owner.googleSub === doc.owner.googleSub) current = absorb(current, kept);
+    if (before && before.owner.googleSub === doc.owner.googleSub) current = absorb(current, before);
     if (!hasLocalWins(current, doc)) current = doc;
+    duplicates = [];
 
     const notices: SyncNotice[] = [];
     const demo = carry?.();
-    if (demo) {
-      const carried = carryBlocks(current, demo, this.options.newId);
-      if (carried.count) notices.push({ kind: 'carried', count: carried.count });
-      current = carried.doc;
+    const carried = demo ? live(demo.blocks).length : 0;
+    if (demo && carried) {
+      current = absorb(current, demo);
+      notices.push({ kind: 'carried', count: carried });
     }
     const skipped = skippedCount(current);
     if (skipped) notices.push({ kind: 'skipped', count: skipped });
@@ -224,12 +260,26 @@ export class DocumentSync {
   }
 
   private failed(e: unknown) {
+    if (fileGone(e)) {
+      this.reopen();
+      return;
+    }
     if (needsSignIn(e)) {
       this.set({ saveState: 'signin' });
       return;
     }
     this.set({ saveState: 'error', saveError: e });
     if (isRetryable(e)) this.schedule(retryDelay(this.attempts++));
+  }
+
+  /**
+   * The plan file went away (another device merged it into an older one and trashed it, or it
+   * was deleted): look for the plan again, and add what this tab has to it.
+   */
+  private reopen() {
+    this.opening = null;
+    this.calendarId = '';
+    void this.open();
   }
 
   private async removeDuplicates() {

@@ -31,7 +31,10 @@ export type SaveResult = { ok: true; version: string } | { ok: false; conflict: 
 export interface StorageFailure {
   readonly retryable?: boolean;
   readonly needsSignIn?: boolean;
+  /** The calendar is gone (trashed or deleted): look for it again. */
+  readonly fileGone?: boolean;
 }
 
 export const isRetryable = (e: unknown): boolean => (e as StorageFailure | null)?.retryable === true;
 export const needsSignIn = (e: unknown): boolean => (e as StorageFailure | null)?.needsSignIn === true;
+export const fileGone = (e: unknown): boolean => (e as StorageFailure | null)?.fileGone === true;

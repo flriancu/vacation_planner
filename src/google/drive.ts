@@ -16,19 +16,26 @@ export const CALL_TIMEOUT_MS = 30_000;
 export class DriveError extends Error {
   constructor(
     readonly status: number,
-    body: string,
+    private readonly body: string,
   ) {
     super(status ? `Google Drive answered ${status}: ${body.slice(0, 200)}` : `Google Drive did not answer: ${body}`);
   }
 
   /** StorageFailure: whether trying again later can help. */
   get retryable(): boolean {
-    return this.status === 0 || this.status === 408 || this.status === 429 || this.status >= 500;
+    return this.status === 0 || this.status === 408 || this.status === 429 || this.status >= 500 || this.rateLimited;
+  }
+
+  /** Google answers "slow down" with 403 and a reason (handle-errors guide): that passes. */
+  get rateLimited(): boolean {
+    return this.status === 403 && /rateLimitExceeded|userRateLimitExceeded/.test(this.body);
   }
 }
 
 /** The plan file is in the Drive trash (or gone): writing to it would save into the bin. */
 export class PlanFileGoneError extends Error {
+  /** StorageFailure: look for the plan file again. */
+  readonly fileGone = true;
   constructor(readonly reason: 'trashed' | 'missing') {
     super(reason === 'trashed' ? 'The plan file is in the Google Drive trash' : 'The plan file no longer exists in Google Drive');
   }
@@ -116,10 +123,10 @@ export async function getVersion(token: string, id: string): Promise<string> {
 }
 
 /** Version first, then content: if the file changes in between, the next save sees a conflict and merges. */
-export async function readPlanFile(token: string, id: string): Promise<{ raw: unknown; version: string }> {
+export async function readPlanFile(token: string, id: string): Promise<{ text: string; version: string }> {
   const version = await getVersion(token, id);
-  const raw: unknown = await json(await call(token, `${FILES}/${encodeURIComponent(id)}?alt=media`));
-  return { raw, version };
+  const text = await (await call(token, `${FILES}/${encodeURIComponent(id)}?alt=media`)).text();
+  return { text, version };
 }
 
 export async function createPlanFile(token: string, content: unknown): Promise<DriveFile> {

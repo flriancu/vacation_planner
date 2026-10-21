@@ -80,7 +80,6 @@ export function App({ storage, account, replica, carry }: AppProps) {
     ...(account.kind === 'google' && { owner: account.sub }),
     ...(replica && { replica }),
     ...(carry && { carry }),
-    newId,
   });
 
   // The document remembers the language too (I18N-1); local storage only makes the first paint right.

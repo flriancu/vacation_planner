@@ -22,6 +22,19 @@ type Raw = Record<string, unknown>;
 const isObject = (v: unknown): v is Raw => typeof v === 'object' && v !== null && !Array.isArray(v);
 const isText = (v: unknown): v is string => typeof v === 'string';
 const isStamp = (v: unknown): v is string => isText(v) && /^\d{4}-\d{2}-\d{2}T/.test(v) && Number.isFinite(Date.parse(v));
+/** Clocks run fast by minutes or hours, not by a week: a stamp further ahead is bogus. */
+const FUTURE_SLACK_MS = 7 * 86_400_000;
+
+/**
+ * A stamp merges can trust: always UTC with milliseconds (merges compare them as strings, so an
+ * offset like `+14:00` would sort wrongly), and never far in the future (it would win every merge,
+ * and the next edit's stamp would overflow the year). Anything else becomes 1970, which loses.
+ */
+function stamp(v: unknown, now: number): string {
+  if (!isStamp(v)) return EPOCH;
+  const t = Date.parse(v);
+  return t > now + FUTURE_SLACK_MS ? EPOCH : new Date(t).toISOString();
+}
 const isNames = (v: unknown) => isObject(v) && isText(v.ro) && isText(v.en);
 const isNumber = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const isYear = (v: unknown) => Number.isInteger(v) && (v as number) >= FIRST_YEAR && (v as number) <= LAST_YEAR;
@@ -68,7 +81,7 @@ const VALID: { [K in keyof Collections]: (r: Raw, types: ReadonlySet<string>) =>
  * aren't timestamps become 1970, so they can't win merges. A plan without its owner's person or
  * a built-in leave type gets them back, with fixed ids so two devices add the same record.
  */
-export function migrate(raw: unknown): PlanDoc {
+export function migrate(raw: unknown, now: number = Date.now()): PlanDoc {
   if (!isObject(raw)) throw new UnsupportedPlanError('The plan file is not a JSON object.');
   if (raw.schemaVersion !== SCHEMA_VERSION) {
     throw new UnsupportedPlanError(
@@ -80,7 +93,7 @@ export function migrate(raw: unknown): PlanDoc {
   }
 
   const base = withoutFloating(raw);
-  const out: Raw = { ...base, owner: { ...raw.owner }, settings: readSettings(raw.settings) };
+  const out: Raw = { ...base, owner: { ...raw.owner }, settings: readSettings(raw.settings, now) };
   const skipped: NonNullable<PlanDoc['skipped']> = {};
   const types = new Set<string>();
   // Leave types first: blocks are checked against them (deleted types too: old blocks keep theirs).
@@ -95,8 +108,8 @@ export function migrate(raw: unknown): PlanDoc {
       }
       const meta = {
         id,
-        createdAt: isStamp(record.createdAt) ? record.createdAt : EPOCH,
-        updatedAt: isStamp(record.updatedAt) ? record.updatedAt : EPOCH,
+        createdAt: stamp(record.createdAt, now),
+        updatedAt: stamp(record.updatedAt, now),
       };
       const valid = VALID[key](record, types);
       if (record.deleted === true) put(kept, id, { ...record, ...meta, deleted: true });
@@ -113,8 +126,8 @@ export function migrate(raw: unknown): PlanDoc {
   return withEssentials(out as PlanDoc);
 }
 
-function readSettings(s: Raw): Settings {
-  return { ...s, lang: s.lang === 'en' ? 'en' : 'ro', updatedAt: isStamp(s.updatedAt) ? s.updatedAt : EPOCH } as Settings;
+function readSettings(s: Raw, now: number): Settings {
+  return { ...s, lang: s.lang === 'en' ? 'en' : 'ro', updatedAt: stamp(s.updatedAt, now) } as Settings;
 }
 
 const alive = <T extends Meta>(c: Record<string, T>) => Object.values(c).filter((r) => !r.deleted);
@@ -128,10 +141,14 @@ function withoutFloating(raw: Raw): Raw {
   const types = Object.entries(raw.leaveTypes);
   const floating = new Set(types.filter(([, t]) => isObject(t) && t.key === 'floating').map(([id]) => id));
   if (floating.size === 0) return raw;
-  const annual =
-    types.find(([id, t]) => isObject(t) && t.key === 'annual' && t.deleted !== true && !floating.has(id))?.[0] ?? 'type-annual';
   const leaveTypes: Raw = {};
   for (const [id, t] of types) if (!floating.has(id)) put(leaveTypes, id, t);
+  let annual = types.find(([id, t]) => isObject(t) && t.key === 'annual' && t.deleted !== true && !floating.has(id))?.[0];
+  if (!annual) {
+    // No annual-leave type to move them to: bring the built-in one back first.
+    annual = 'type-annual';
+    put(leaveTypes, annual, { ...BUILTIN_TYPES.find((t) => t.key === 'annual')!, id: annual, createdAt: EPOCH, updatedAt: EPOCH });
+  }
   let blocks = raw.blocks;
   if (isObject(blocks)) {
     const retyped: Raw = {};

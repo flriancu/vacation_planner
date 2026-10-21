@@ -70,3 +70,29 @@ test('a plan file with entries this version cannot read still opens, and keeps t
   await expect.poll(() => savedStarts(drive).sort()).toEqual(['2027-03-08', '2027-03-22', '2027-04-05']);
   expect((drive.content().blocks as Record<string, { status: string }>).odd!.status).toBe('tentative');
 });
+
+test('a block that already breaks a rule (from another device) can still take a note, but no new dates or status', async ({ page }) => {
+  const drive = new FakeDrive();
+  await open(page, drive);
+  await cell(page, '2027-03-10').click();
+  await cell(page, '2027-03-11').click();
+  await page.getByRole('dialog', { name: 'Concediu nou' }).getByRole('button', { name: 'Salvează' }).click(); // an idea
+  await addPlanned(page, '2027-03-08', '2027-03-12'); // planned leave may cover an idea
+  await expect.poll(() => savedStarts(drive).length).toBe(2);
+  // Another device made that idea planned: now two planned blocks overlap.
+  const blocks = drive.content().blocks as Record<string, { start: string; status: string; updatedAt: string }>;
+  const other = Object.values(blocks).find((b) => b.start === '2027-03-10')!;
+  other.status = 'planned';
+  other.updatedAt = '2027-03-02T00:00:00.000Z'; // later than this device's own copy of it
+  [...drive.files.values()][0]!.version++;
+  await page.reload();
+  await page.locator('[data-date="2027-03-10"] .outline').nth(1).waitFor();
+
+  await cell(page, '2027-03-08').click();
+  const edit = page.getByRole('dialog', { name: 'Editează concediul' });
+  await edit.getByLabel('Notă').fill('zbor');
+  await expect(edit.getByRole('button', { name: 'Salvează' })).toBeEnabled();
+  await edit.getByRole('radio', { name: 'Aprobat' }).check();
+  await expect(edit.getByRole('button', { name: 'Salvează' })).toBeDisabled();
+  await expect(edit.getByText('Se suprapune cu alt concediu')).toBeVisible();
+});

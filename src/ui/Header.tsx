@@ -213,7 +213,8 @@ function AccountSlot({ account, settings, compact }: { account: Account; setting
       </>
     );
   }
-  const initial = (account.name || account.email).trim().charAt(0).toLocaleUpperCase() || '?';
+  // The first character, not the first UTF-16 unit: an emoji or an accented capital stays whole.
+  const initial = Array.from((account.name || account.email).trim())[0]?.toLocaleUpperCase() ?? '?';
   return (
     <Menu
       label={t('account.menu', { email: account.email })}

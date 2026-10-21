@@ -1,9 +1,18 @@
-import { migrate, toFile } from '../domain/migrate';
+import { migrate, toFile, UnsupportedPlanError } from '../domain/migrate';
 import type { PlanDoc } from '../domain/schema';
 import { createPlanFile, findPlanFiles, getVersion, readPlanFile, trashPlanFile, writePlanFile, type DriveFile } from '../google/drive';
 import type { CalendarRef, SaveResult, Storage } from './Storage';
 
 const ref = (f: DriveFile): CalendarRef => ({ calendarId: f.id, ownerName: '', writable: true });
+
+/** The file's content; content that isn't JSON is a damaged file, not a Drive problem. */
+function parse(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new UnsupportedPlanError('The plan file is not valid JSON.');
+  }
+}
 
 /**
  * Plans as JSON files in the user's own Google Drive (DESIGN §4.2). `token` returns a valid
@@ -23,8 +32,8 @@ export class DriveStorage implements Storage {
   }
 
   async load(calendarId: string) {
-    const { raw, version } = await readPlanFile(this.token(), calendarId);
-    return { doc: migrate(raw), version };
+    const { text, version } = await readPlanFile(this.token(), calendarId);
+    return { doc: migrate(parse(text)), version };
   }
 
   version(calendarId: string): Promise<string> {
