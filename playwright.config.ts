@@ -9,7 +9,7 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'list',
   use: {
-    baseURL: `http://localhost:${PORT}/vacation_planner/`,
+    baseURL: `http://localhost:${PORT}/`,
     trace: 'retain-on-failure',
   },
   projects: [
@@ -18,7 +18,7 @@ export default defineConfig({
   ],
   webServer: {
     command: `npm run build && npx vite preview --port ${PORT} --strictPort`,
-    url: `http://localhost:${PORT}/vacation_planner/`,
+    url: `http://localhost:${PORT}/`,
     // Always a fresh build: a leftover server on the port would otherwise serve stale code.
     reuseExistingServer: false,
     timeout: 120_000,

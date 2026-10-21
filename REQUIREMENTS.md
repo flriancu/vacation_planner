@@ -147,7 +147,7 @@ Priority: **M** = must (v1), **S** = should (v1 if cheap), **v2** = phase 2.
 
 | ID | Requirement |
 |---|---|
-| NF-1 | Static single-page app, no server of its own. Hosted on **GitHub Pages** from a public repo (the OAuth client ID is not a secret; no secrets in the repo). |
+| NF-1 | Static single-page app, no server of its own. Hosted on **GitHub Pages** from a public repo, at its own subdomain `concediu.floriniancu.ro`, not under the shared `flriancu.github.io` address: a browser treats every site there as one, so any of them could read this app's session token and stored data (the OAuth client ID is not a secret; no secrets in the repo). |
 | NF-2 | Works equally on desktop and phone: the continuous week list fits a phone width (7 day columns, notes below or folded). Desktop adds side panels for balance and suggestions. |
 | NF-3 | My data is stored only in my Google Drive. The app sends nothing to any other service. |
 | NF-4 | Saving happens automatically after each change (short debounce); a visible state shows saved / saving / error. |

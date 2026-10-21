@@ -8,7 +8,7 @@ Guiding rule: **keep long-term maintenance low.** Few dependencies, a stable fra
 | Concern | Choice | Why |
 |---|---|---|
 | UI | React + TypeScript (strict) | The component API (function components and hooks) hasn't changed since 2019; largest pool of help. Used client-side only, so the server-side features where React's churn happens don't apply. |
-| Build | Vite | The standard way to build a static app; the output is plain files for GitHub Pages (`base: '/vacation_planner/'`). |
+| Build | Vite | The standard way to build a static app; the output is plain files for GitHub Pages (`base: './'`: relative paths, so the build works at the custom domain's root and under a sub-path). |
 | Unit tests | Vitest | Same config as Vite. Covers everything in `src/domain`. |
 | End-to-end tests | Playwright | Runs the main user flows on every push, with `MemoryStorage` (§4.4) and a fake sign-in. |
 | Styling | Plain CSS + CSS variables (one file per component) | No dependency; the theme is variables (CAL-4). |
@@ -190,7 +190,7 @@ Same interface, kept in memory and optionally seeded from a JSON file. Used:
 2. Enable the **Google Drive API** and the **Google Calendar API** (plus the **Google Picker API** in v2).
 3. Configure the OAuth consent screen: user type *External*, app name and support e-mail, scopes as in §5.1, publishing status **In production** (AUTH-4).
 4. Create an OAuth client ID of type *Web application*:
-   - authorized JavaScript origins: `https://flriancu.github.io` and `http://localhost:5173`;
+   - authorized JavaScript origins: `https://concediu.floriniancu.ro` and `http://localhost:5173`;
    - redirect URIs: none (the token model doesn't use them).
 5. v2 only: create an API key restricted to the Picker API and the same origins.
 6. Put the client ID in `src/config.ts`. It is not secret, so it's committed.
