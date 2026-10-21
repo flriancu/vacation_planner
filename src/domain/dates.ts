@@ -16,6 +16,13 @@ export function toUTC(date: ISODate): number {
   return t;
 }
 
+/** A real calendar date written as `YYYY-MM-DD` (not `2027-02-30`, not `2027-1-1`). */
+export function isISODate(value: unknown): value is ISODate {
+  if (typeof value !== 'string' || !ISO_RE.test(value)) return false;
+  const [y, m, d] = value.split('-').map(Number) as [number, number, number];
+  return fromUTC(Date.UTC(y, m - 1, d)) === value;
+}
+
 export function fromUTC(time: number): ISODate {
   return new Date(time).toISOString().slice(0, 10);
 }

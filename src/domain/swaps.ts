@@ -1,6 +1,6 @@
 import { buildDays, personBlocks } from './calendar';
 import { addDays, isWeekend, weekday, yearEnd, yearStart, type ISODate } from './dates';
-import { ALWAYS_SUNDAY, publicHolidays, type Holiday } from './holidays';
+import { ALWAYS_SUNDAY, FIRST_YEAR, LAST_YEAR, publicHolidays, type Holiday } from './holidays';
 import { live, type Block, type PlanDoc } from './schema';
 
 export interface SwapReminder {
@@ -22,6 +22,7 @@ export function earnsSwap(holiday: Holiday): boolean {
 
 /** Swap reminders for every weekend holiday of `year` (DAY-4). */
 export function swapReminders(doc: PlanDoc, personId: string, year: number): SwapReminder[] {
+  if (year < FIRST_YEAR || year > LAST_YEAR) return [];
   const days = buildDays(doc, personId, addDays(yearStart(year), -2), addDays(yearEnd(year), 2));
   const blocks = personBlocks(doc, personId);
   const dismissed = new Set(

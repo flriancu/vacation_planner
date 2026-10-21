@@ -1,4 +1,4 @@
-import { COLLECTION_KEYS, type Meta, type PlanDoc } from './schema';
+import { COLLECTION_KEYS, put, type Meta, type PlanDoc } from './schema';
 
 /**
  * Record-by-record merge of two versions of the same plan (DESIGN §4.3): for every id in
@@ -12,11 +12,24 @@ export function merge(local: PlanDoc, remote: PlanDoc): PlanDoc {
     const theirs = remote[key] as Record<string, Meta>;
     const merged: Record<string, Meta> = { ...theirs };
     for (const [id, mine] of Object.entries(local[key] as Record<string, Meta>)) {
-      const other = theirs[id];
-      if (!other || mine.updatedAt > other.updatedAt) merged[id] = mine;
+      // Own properties only: an id like `constructor` is not Object.prototype's.
+      const other = Object.hasOwn(theirs, id) ? theirs[id] : undefined;
+      if (!other || mine.updatedAt > other.updatedAt) put(merged, id, mine);
     }
     (out as Record<string, unknown>)[key] = merged;
   }
   out.settings = local.settings.updatedAt > remote.settings.updatedAt ? local.settings : remote.settings;
   return out;
+}
+
+/** True when `merge(local, remote)` keeps something of `local` that `remote` lacks: it needs saving. */
+export function hasLocalWins(local: PlanDoc, remote: PlanDoc): boolean {
+  if (local.settings.updatedAt > remote.settings.updatedAt) return true;
+  return COLLECTION_KEYS.some((key) => {
+    const theirs = remote[key] as Record<string, Meta>;
+    return Object.entries(local[key] as Record<string, Meta>).some(([id, mine]) => {
+      const other = Object.hasOwn(theirs, id) ? theirs[id] : undefined;
+      return !other || mine.updatedAt > other.updatedAt;
+    });
+  });
 }

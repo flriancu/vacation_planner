@@ -122,6 +122,11 @@ export type PlanDoc = {
   schemaVersion: 1;
   owner: { googleSub: string };
   settings: Settings;
+  /**
+   * Records from the file that this app can't read (migrate.ts). Kept out of the collections,
+   * so they never reach the calendar, and written back unchanged (`toFile`).
+   */
+  skipped?: Partial<Record<keyof Collections, Record<string, unknown>>>;
 } & { [K in keyof Collections]: Record<string, Collections[K]> };
 
 export const SCHEMA_VERSION = 1;
@@ -150,6 +155,11 @@ export const BUILTIN_TYPES: readonly Omit<LeaveType, keyof Meta>[] = [
   { key: 'sick', name: { ro: 'Concediu medical', en: 'Sick leave' }, color: '#8cb4e0', budget: 'none', needsApproval: false },
   { key: 'unpaid', name: { ro: 'Concediu fără plată', en: 'Unpaid leave' }, color: '#a0a0a0', budget: 'none', needsApproval: true },
 ];
+
+/** `obj[key] = value` that stays a plain own property even for ids like `__proto__`. */
+export function put(obj: object, key: string, value: unknown) {
+  Object.defineProperty(obj, key, { value, enumerable: true, writable: true, configurable: true });
+}
 
 export function live<T extends Meta>(collection: Record<string, T>): T[] {
   return Object.values(collection).filter((r) => !r.deleted);

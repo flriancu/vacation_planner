@@ -68,12 +68,16 @@ const RULES: readonly Rule[] = [
 /** Holidays that always fall on a Sunday, so they never earn a swap day. */
 export const ALWAYS_SUNDAY: ReadonlySet<HolidayKey> = new Set(['easter', 'pentecost']);
 
+/** The years the holiday rules cover (the Julian → Gregorian offset below is 13 days only in these). */
+export const FIRST_YEAR = 1900;
+export const LAST_YEAR = 2099;
+
 /**
  * Orthodox Easter Sunday as a Gregorian date: Meeus' Julian algorithm, then
  * +13 days from the Julian to the Gregorian calendar (valid 1900–2099).
  */
 export function orthodoxEaster(year: number): ISODate {
-  if (year < 1900 || year > 2099) throw new Error(`Orthodox Easter is supported for 1900–2099, not ${year}`);
+  if (year < FIRST_YEAR || year > LAST_YEAR) throw new Error(`Orthodox Easter is supported for 1900–2099, not ${year}`);
   const a = year % 4;
   const b = year % 7;
   const c = year % 19;
@@ -116,10 +120,15 @@ export function publicHolidays(year: number, overrides: readonly HolidayOverride
   return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
-/** Holidays of every year that touches `from`–`to`, keyed by date. */
+/**
+ * Holidays of every year that touches `from`–`to`, keyed by date. Years outside 1900–2099 have
+ * none: views at the edges of that range reach a few days past it, and must not fail there.
+ */
 export function holidaysBetween(from: ISODate, to: ISODate, overrides: readonly HolidayOverride[] = []): Map<ISODate, Holiday> {
   const out = new Map<ISODate, Holiday>();
-  for (let y = Number(from.slice(0, 4)); y <= Number(to.slice(0, 4)); y++) {
+  const first = Math.max(Number(from.slice(0, 4)), FIRST_YEAR);
+  const last = Math.min(Number(to.slice(0, 4)), LAST_YEAR);
+  for (let y = first; y <= last; y++) {
     for (const h of publicHolidays(y, overrides)) if (h.date >= from && h.date <= to) out.set(h.date, h);
   }
   return out;

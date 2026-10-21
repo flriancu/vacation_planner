@@ -59,10 +59,13 @@ export function blockBudget(doc: PlanDoc, block: Block, year: number): Budget {
   return type.budget;
 }
 
-/** Pairs of planned/approved blocks of the same person that overlap (BLK-5). */
+/**
+ * Pairs of planned/approved blocks of the same person that overlap (BLK-5). Office-closed days
+ * are days off anyway, so leave may span them (BLK-6) and they never count as an overlap.
+ */
 export function findOverlaps(doc: PlanDoc, personId: string): [Block, Block][] {
   const firm = personBlocks(doc, personId)
-    .filter((b) => b.status !== 'idea')
+    .filter((b) => b.status !== 'idea' && doc.leaveTypes[b.typeId]?.key !== 'closed')
     .sort((a, b) => a.start.localeCompare(b.start));
   const out: [Block, Block][] = [];
   for (let i = 0; i < firm.length; i++) {

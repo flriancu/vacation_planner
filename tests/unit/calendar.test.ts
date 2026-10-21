@@ -69,4 +69,11 @@ describe('findOverlaps', () => {
     b.block('annual', '2025-07-16', '2025-07-18', 'planned');
     expect(findOverlaps(b.doc, b.personId)).toEqual([[a, c]]);
   });
+
+  it('lets leave span office-closed days (BLK-6)', () => {
+    const b = new DocBuilder();
+    b.block('closed', '2027-12-28', '2027-12-31', 'planned');
+    b.block('annual', '2027-12-20', '2028-01-07', 'planned');
+    expect(findOverlaps(b.doc, b.personId)).toEqual([]);
+  });
 });
