@@ -40,14 +40,15 @@ Priority: **M** = must (v1), **S** = should (v1 if cheap), **v2** = phase 2.
 |---|---|---|
 | CAL-1 | M | Show the calendar as one continuous list of weeks, Monday to Sunday, with no break between months, like the spreadsheet. |
 | CAL-2 | M | Default range: the selected year plus the weeks that overlap the previous December and the following January, so the Christmas–Epiphany break is visible in full. A year switcher moves between years. |
-| CAL-3 | M | Separate months with a stepped line that follows the real first day of each month. Show the month name beside the weeks it covers. |
+| CAL-3 | M | Separate months with a stepped line that follows the real first day of each month. Show the month name in a narrow vertical band along the weeks whose Monday is in that month, like the merged cells of the old sheet; short bands at the view's edges leave out the year. |
 | CAL-4 | M | Two colours only: one tint for days off anyway (weekend, public holiday, office closed) and one accent for all my leave, whatever its type, swap days included (I choose and request them). The kind of leave is shown in the editor and tooltip, not by colour. Holidays also get a dot under the number. |
-| CAL-5 | M | A notes column beside each week shows the holiday names in that week (e.g. "Paște", "Rusalii", "Sf. Maria"). |
+| CAL-5 | M | Holiday names are not drawn on the calendar (only the dot, CAL-4): they are in the day's tooltip and screen-reader label, and in the hint line when the day is picked ("Prima zi: marți 6 ianuarie (Boboteaza)"). This keeps the calendar narrow, leaving room for side panels. |
 | CAL-6 | M | Status matters most and is drawn as a lightness ramp, with line style as a second cue: `idea` = a very faint tint + dashed outline; `planned` = light fill + solid outline; `approved` = the full accent + thick outline + bold number. Each leave block is one outline, even across weeks. Past and out-of-year days mute only the number, never the fill. Contrast meets WCAG 1.4.11 (≥ 3:1 for outlines and fills against neighbouring cells) and 1.4.3 (≥ 4.5:1 for numbers) in every scheme. |
 | CAL-7 | M | Say in plain words what a block costs and what it gives, with full dates and no abbreviations, e.g. "Folosești 1 zi de concediu → ești liber 5 zile la rând: vineri 27 noiembrie – marți 1 decembrie". Shown in the editor and as the tooltip of the block's days; nothing is written on the calendar itself. |
 | CAL-8 | M | Create a block by selecting a date range (drag on desktop, tap start and tap end on phone), then choose its type and status. |
 | CAL-9 | M | Tapping or clicking a block opens it to edit dates, type, status and note, or to delete it. |
 | CAL-10 | S | Show today's date. |
+| CAL-12 | M | Page layout (from industry guidance, see DESIGN §7): one header row with title, year and **Azi** (scrolls to today; the page also opens there), then on the right the save status, a **Setări** menu (colours, appearance, language) and the account slot (sign-in button signed out, account menu signed in). The header hides while scrolling down. Wide screens get a supporting pane on the right (legend, closable hint; later balance and suggestions); narrower ones show the legend above the calendar (behind a "Legendă" toggle on phones). Signed out, a thin strip under the header explains the demo. |
 | CAL-11 | M | Switchable colour schemes (Roz, Neutru, Contrast ridicat), each with light and dark variants, plus Automatic / Light / Dark. Remembered in the browser and applied before first paint. |
 
 ### 4.2 Day types and holiday data (DAY)
@@ -130,7 +131,7 @@ Priority: **M** = must (v1), **S** = should (v1 if cheap), **v2** = phase 2.
 
 | ID | Pri | Requirement |
 |---|---|---|
-| I18N-1 | M | All interface text comes from translation files: Romanian and English, switchable at any time, with the choice remembered. |
+| I18N-1 | M | All interface text comes from translation files: Romanian and English, switchable at any time, with the choice remembered. One language switch, "Română \| English" with the current one highlighted, looks the same on every page (app, privacy, terms) and the choice is shared between them. |
 | I18N-2 | M | Dates, month and day names follow the selected language; weeks always start on Monday. |
 
 ### 4.10 Sign-in (AUTH)
@@ -140,7 +141,7 @@ Priority: **M** = must (v1), **S** = should (v1 if cheap), **v2** = phase 2.
 | AUTH-1 | M | Sign in with Google. The app needs no account of its own. |
 | AUTH-2 | M | Scopes: `openid`/`email`/`profile` + `drive.file` at sign-in. The Calendar scope is requested only on first use of IO-3. No broad Drive scope, and no other sensitive or restricted scopes. |
 | AUTH-4 | M | The Google OAuth app runs in **production mode, unverified**. Because sign-in uses only non-sensitive scopes, there's no warning screen and the permission doesn't expire. The one-time "unverified app" screen appears only when someone first enables Calendar push (limit: 100 such users ever, which is fine for family use). |
-| AUTH-3 | M | Signed out, the app shows an empty demo year (holidays only) so it can be tried without signing in. Nothing is saved. |
+| AUTH-3 | M | Signed out, the app shows a demo year that can be edited but saves nothing, under one banner that says so and offers sign-in. A returning browser is offered "Continuă ca …" (and "Alt cont"). A reload in the same tab keeps the Google session (sessionStorage, about an hour); a new visit takes one click. |
 
 ## 5. Non-functional requirements
 
@@ -153,6 +154,7 @@ Priority: **M** = must (v1), **S** = should (v1 if cheap), **v2** = phase 2.
 | NF-5 | Holiday calculation and the suggestion engine are plain functions with no UI or storage dependencies, covered by unit tests, including the acceptance cases in §7. |
 | NF-6 | Accessible: keyboard can select ranges, colour is not the only signal (CAL-6), contrast passes WCAG AA. |
 | NF-7 | **No personal data in the repo.** No real leave dates, plans or sheet extracts in code, tests or docs. Public tests use the made-up demo plan (§7). Tests on my real data live in the git-ignored `private/` folder and run only on my machine. My history lives only in my Drive file. |
+| NF-8 | Public pages `privacy.html` and `terms.html` (Romanian and English), linked from the app's footer and used on Google's sign-in setup (Branding: privacy policy and terms of service). |
 
 ## 6. Data and storage design (constraints)
 

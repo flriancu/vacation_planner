@@ -106,6 +106,18 @@ export interface Collections {
   following: Follow;
 }
 
+/** Every collection of a plan, in a fixed order (merge, migrate). */
+export const COLLECTION_KEYS: readonly (keyof Collections)[] = [
+  'people',
+  'leaveTypes',
+  'blocks',
+  'holidayOverrides',
+  'yearSettings',
+  'adjustments',
+  'dismissals',
+  'following',
+];
+
 export type PlanDoc = {
   schemaVersion: 1;
   owner: { googleSub: string };

@@ -54,7 +54,7 @@ export function Calendar({ year, doc, personId, today, onCreate, onOpen }: Props
   const { from, to } = viewRange(year);
 
   const days = useMemo(() => buildDays(doc, personId, addDays(from, -40), addDays(to, 40)), [doc, personId, from, to]);
-  const weeks = useMemo(() => buildWeeks(from, to, days), [from, to, days]);
+  const weeks = useMemo(() => buildWeeks(from, to), [from, to]);
   // What each block costs and gives, in words: the days' tooltip and screen-reader text (CAL-7).
   const sentences = useMemo(() => {
     const out = new Map<string, string>();
@@ -157,10 +157,22 @@ export function Calendar({ year, doc, personId, today, onCreate, onOpen }: Props
   const isFree = (b: Block) => FREE_TYPES.has(doc.leaveTypes[b.typeId]?.key ?? '');
   const typeColor = (b: Block) => (isFree(b) ? 'var(--muted)' : 'var(--leave)');
 
+  // Holiday names aren't drawn on the calendar (only a dot): they're in the tooltip, the
+  // screen-reader label and this hint line when a day is picked.
+  const holidayNames = (d: ISODate) => days.get(d)?.holiday?.names.map(name).join(' · ');
+  const dayWithHoliday = (d: ISODate) => {
+    const h = holidayNames(d);
+    return `${fmt(d, { weekday: 'long' })} ${fmt(d, { day: 'numeric', month: 'long' })}${h ? ` (${h})` : ''}`;
+  };
+
   return (
     <section className="calendar-wrap">
       <p id="cal-help" className="cal-help" aria-live="polite">
-        {pending ? t('calendar.pending', { date: fmt(pending, { day: 'numeric', month: 'long' }) }) : t('calendar.help')}
+        {pending ? (
+          <span className="cal-pending">{t('calendar.pending', { date: dayWithHoliday(pending) })}</span>
+        ) : (
+          <span className="sr-only">{t('calendar.help')}</span>
+        )}
       </p>
       {/* The grid itself isn't a tab stop: one day cell is (roving tabindex), and keys bubble up here. */}
       {/* oxlint-disable-next-line jsx-a11y/interactive-supports-focus */}
@@ -180,13 +192,21 @@ export function Calendar({ year, doc, personId, today, onCreate, onOpen }: Props
               <span className="sr-only">{fmt(d, { weekday: 'long' })}</span>
             </div>
           ))}
-          <div className="notes" aria-hidden="true" />
         </div>
 
         {weeks.map((w) => (
           <div key={w.monday} className="week" role="row">
             <div className="month-col" role="rowheader">
-              {w.month && <span className="month-name">{fmt(w.month, { month: 'long', year: 'numeric' })}</span>}
+              {w.month && (
+                <span
+                  className={`month-band${w === weeks[0] ? ' first' : ''}`}
+                  style={{ '--span': w.span } as CSSProperties}
+                  aria-label={fmt(w.month, { month: 'long', year: 'numeric' })}
+                >
+                  {/* Two-week bands (the view's edges) are too short for the year too. */}
+                  <span aria-hidden="true">{fmt(w.month, w.span! >= 3 ? { month: 'long', year: 'numeric' } : { month: 'long' })}</span>
+                </span>
+              )}
             </div>
             {w.days.map((d) => {
               const info = days.get(d)!;
@@ -225,12 +245,7 @@ export function Calendar({ year, doc, personId, today, onCreate, onOpen }: Props
                   tabIndex={d === focusDate ? 0 : -1}
                   aria-selected={selected}
                   aria-label={describe}
-                  title={
-                    info.blocks
-                      .map((b) => sentences.get(b.id))
-                      .filter(Boolean)
-                      .join('\n') || undefined
-                  }
+                  data-tip={[holidayNames(d), ...info.blocks.map((b) => sentences.get(b.id))].filter(Boolean).join('\n') || undefined}
                   onPointerDown={(e) => onPointerDown(e, d)}
                   onPointerEnter={() => pending && setSelection({ anchor: pending, focus: d })}
                   onClick={(e) => onClick(e, d)}
@@ -252,13 +267,6 @@ export function Calendar({ year, doc, personId, today, onCreate, onOpen }: Props
                 </div>
               );
             })}
-            <div className="notes" role="gridcell">
-              {w.holidays.map((h) => (
-                <span key={h.date} className="note">
-                  {h.names.map(name).join(' · ')}
-                </span>
-              ))}
-            </div>
           </div>
         ))}
       </div>

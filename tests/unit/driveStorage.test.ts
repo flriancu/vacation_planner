@@ -1,0 +1,96 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { UnsupportedPlanError } from '../../src/domain/migrate';
+import { AuthExpiredError } from '../../src/google/auth';
+import { DriveStorage } from '../../src/storage/DriveStorage';
+import { DocBuilder } from '../fixtures/builder';
+
+type Call = { url: string; method: string; headers: Record<string, string>; body?: string };
+
+/** A fake Drive: answers by URL pattern and records every request. */
+function fakeDrive(routes: [RegExp, (call: Call) => { status?: number; json?: unknown; text?: string }][]) {
+  const calls: Call[] = [];
+  vi.stubGlobal('fetch', async (url: string, init: RequestInit = {}) => {
+    const call: Call = {
+      url,
+      method: init.method ?? 'GET',
+      headers: init.headers as Record<string, string>,
+      ...(typeof init.body === 'string' && { body: init.body }),
+    };
+    calls.push(call);
+    const route = routes.find(([re]) => re.test(`${call.method} ${url}`));
+    if (!route) throw new Error(`unexpected ${call.method} ${url}`);
+    const r = route[1](call);
+    const status = r.status ?? 200;
+    return new Response(r.json !== undefined ? JSON.stringify(r.json) : (r.text ?? ''), { status });
+  });
+  return calls;
+}
+
+afterEach(() => vi.unstubAllGlobals());
+
+const storage = () => new DriveStorage(() => 'tok');
+
+describe('DriveStorage', () => {
+  it('finds my plan files by app property, with the token', async () => {
+    const calls = fakeDrive([[/^GET .*\/drive\/v3\/files\?/, () => ({ json: { files: [{ id: 'f1', version: '3' }] } })]]);
+    expect(await storage().listCalendars()).toEqual([{ calendarId: 'f1', ownerName: '', writable: true }]);
+    const q = new URL(calls[0]!.url).searchParams.get('q');
+    expect(q).toContain("appProperties has { key='app' and value='vacation_planner' }");
+    expect(q).toContain("'me' in owners");
+    expect(calls[0]!.headers.Authorization).toBe('Bearer tok');
+  });
+
+  it('creates the file with metadata and content in one multipart upload', async () => {
+    const calls = fakeDrive([[/^POST .*upload\/drive\/v3\/files\?uploadType=multipart/, () => ({ json: { id: 'new', version: '1' } })]]);
+    const doc = new DocBuilder().doc;
+    expect(await storage().create(doc)).toEqual({ calendarId: 'new', version: '1' });
+    const body = calls[0]!.body!;
+    expect(calls[0]!.headers['Content-Type']).toMatch(/^multipart\/related; boundary=/);
+    expect(body).toContain('"appProperties":{"app":"vacation_planner"}');
+    expect(body).toContain('"name":"vacation-planner.json"');
+    expect(body).toContain('"schemaVersion":1');
+  });
+
+  it('loads and checks the file', async () => {
+    const doc = new DocBuilder().doc;
+    fakeDrive([
+      [/fields=version$/, () => ({ json: { version: '5' } })],
+      [/alt=media$/, () => ({ json: doc })],
+    ]);
+    const loaded = await storage().load('f1');
+    expect(loaded.version).toBe('5');
+    expect(loaded.doc.owner).toEqual(doc.owner);
+  });
+
+  it('refuses a file with an unknown schema', async () => {
+    fakeDrive([
+      [/fields=version$/, () => ({ json: { version: '5' } })],
+      [/alt=media$/, () => ({ json: { schemaVersion: 9 } })],
+    ]);
+    await expect(storage().load('f1')).rejects.toBeInstanceOf(UnsupportedPlanError);
+  });
+
+  it('writes when the version is unchanged, and returns the new version', async () => {
+    const calls = fakeDrive([
+      [/^GET .*fields=version$/, () => ({ json: { version: '6' } })],
+      [/^PATCH .*uploadType=media/, () => ({ json: { version: '7' } })],
+    ]);
+    expect(await storage().save('f1', new DocBuilder().doc, '6')).toEqual({ ok: true, version: '7' });
+    expect(calls.map((c) => c.method)).toEqual(['GET', 'PATCH']);
+  });
+
+  it('reports a conflict without writing when another device saved in between', async () => {
+    const calls = fakeDrive([[/^GET .*fields=version$/, () => ({ json: { version: '8' } })]]);
+    expect(await storage().save('f1', new DocBuilder().doc, '6')).toEqual({ ok: false, conflict: true });
+    expect(calls).toHaveLength(1);
+  });
+
+  it('turns 401 into AuthExpiredError, and passes through an error from the token getter', async () => {
+    fakeDrive([[/.*/, () => ({ status: 401, text: 'expired' })]]);
+    await expect(storage().listCalendars()).rejects.toBeInstanceOf(AuthExpiredError);
+    const noToken = new DriveStorage(() => {
+      throw new AuthExpiredError();
+    });
+    await expect(noToken.listCalendars()).rejects.toBeInstanceOf(AuthExpiredError);
+  });
+});

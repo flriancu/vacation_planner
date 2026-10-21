@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildDays } from '../../src/domain/calendar';
 import { weekday } from '../../src/domain/dates';
 import { buildWeeks, monthEdges, outlineEdges, viewRange } from '../../src/ui/calendarModel';
-import { DocBuilder } from '../fixtures/builder';
 
 describe('viewRange (CAL-2)', () => {
   it('runs Monday to Sunday from mid-December before to mid-January after', () => {
@@ -15,16 +13,16 @@ describe('viewRange (CAL-2)', () => {
 });
 
 describe('buildWeeks', () => {
-  it('names each month in the week it starts, and the first week', () => {
+  it('starts a month band at the first week whose Monday is in that month', () => {
     const { from, to } = viewRange(2027);
-    const b = new DocBuilder();
-    const weeks = buildWeeks(from, to, buildDays(b.doc, b.personId, from, to));
+    const weeks = buildWeeks(from, to);
     expect(weeks).toHaveLength(57);
-    expect(weeks[0]!.month).toBe('2026-12-01');
-    expect(weeks.filter((w) => w.month)).toHaveLength(14); // first week (Dec) + Jan–Dec + Jan after
-    const jan = weeks.find((w) => w.month === '2027-01-01')!;
-    expect(jan.days[0]).toBe('2026-12-28');
-    expect(jan.holidays.map((h) => h.date)).toEqual(['2027-01-01', '2027-01-02']);
+    const bands = weeks.filter((w) => w.month);
+    expect(bands).toHaveLength(14); // the December before, Jan–Dec, the January after
+    expect(bands[0]).toMatchObject({ monday: '2026-12-14', month: '2026-12-01', span: 3 });
+    expect(bands[1]).toMatchObject({ monday: '2027-01-04', month: '2027-01-01', span: 4 });
+    expect(bands.at(-1)).toMatchObject({ monday: '2028-01-03', month: '2028-01-01', span: 2 });
+    expect(bands.reduce((n, w) => n + w.span!, 0)).toBe(57);
   });
 });
 

@@ -4,10 +4,10 @@ import { useI18n } from '../i18n';
 const LEAVE = { '--c': 'var(--leave)' } as CSSProperties;
 
 /** Days off anyway, holidays, and the three statuses of your leave, drawn as in the calendar (CAL-4, CAL-6). */
-export function Legend() {
+export function Legend({ stacked = false }: { stacked?: boolean }) {
   const { t } = useI18n();
   return (
-    <ul className="legend" aria-label={t('legend.label')}>
+    <ul className={`legend${stacked ? ' stacked' : ''}`} aria-label={t('legend.label')}>
       <li>
         <span className="swatch base-weekend" /> {t('legend.free')}
       </li>

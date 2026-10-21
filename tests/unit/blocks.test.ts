@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { blockStats } from '../../src/domain/blocks';
 import { buildDays } from '../../src/domain/calendar';
-import { deleteRecord, updateRecord } from '../../src/domain/edit';
+import { deleteRecord, restoreRecord, updateRecord } from '../../src/domain/edit';
 import { DocBuilder } from '../fixtures/builder';
 import { demo2027 } from '../fixtures/demo2027';
 
@@ -48,6 +48,15 @@ describe('updateRecord / deleteRecord', () => {
     const block = b.block('annual', '2027-09-06');
     const doc = deleteRecord(b.doc, 'blocks', block.id, '2027-01-01T00:00:00.000Z');
     expect(doc.blocks[block.id]).toMatchObject({ deleted: true, updatedAt: '2027-01-01T00:00:00.000Z' });
+  });
+
+  it('restores a deleted record, newer than the delete', () => {
+    const b = new DocBuilder();
+    const block = b.block('annual', '2027-09-06');
+    const deleted = deleteRecord(b.doc, 'blocks', block.id, '2027-01-01T00:00:00.000Z');
+    const restored = restoreRecord(deleted, 'blocks', block.id, '2027-01-01T00:00:05.000Z');
+    expect(restored.blocks[block.id]!.deleted).toBeUndefined();
+    expect(restored.blocks[block.id]!.updatedAt).toBe('2027-01-01T00:00:05.000Z');
   });
 
   it('refuses unknown ids', () => {

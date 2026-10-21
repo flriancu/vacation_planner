@@ -1,13 +1,19 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 import { yearOf, type ISODate } from '../domain/dates';
-import { deleteRecord, updateRecord } from '../domain/edit';
+import { deleteRecord, restoreRecord, updateRecord } from '../domain/edit';
 import { addRecord, live, newPlanDoc, STATUS_RANK, type PlanDoc, type RecordContext } from '../domain/schema';
 import { I18nProvider, useI18n, type Lang } from '../i18n';
 import type { Storage } from '../storage/Storage';
+import type { Account } from './account';
 import { BlockEditor, type Draft, type EditorTarget } from './BlockEditor';
 import { Calendar } from './Calendar';
-import { Legend } from './Legend';
-import { SCHEMES, useTheme, type Mode } from './theme';
+import { DemoStrip } from './DemoStrip';
+import { Header } from './Header';
+import { SidePane } from './SidePane';
+import { useTheme } from './theme';
+import { Tooltips } from './Tooltips';
+import { UndoToast, type UndoOffer } from './UndoToast';
+import { useHideOnScroll, useWidthClass } from './useLayout';
 import { useDocument, type SaveState } from './useDocument';
 import './app.css';
 
@@ -32,12 +38,13 @@ function storedLang(): Lang | null {
   }
 }
 
-export function App({ storage }: { storage: Storage }) {
+export function App({ storage, account }: { storage: Storage; account: Account }) {
   const [lang, setLangState] = useState<Lang>(() => storedLang() ?? 'ro');
-  const { doc, saveState, loadError, update } = useDocument(
-    storage,
-    () => newPlanDoc({ googleSub: 'local', personName: 'Me' }, recordContext()).doc,
-  );
+  const { doc, saveState, loadError, update, flush } = useDocument(storage, () => {
+    const owner =
+      account.kind === 'google' ? { googleSub: account.sub, personName: account.name } : { googleSub: 'demo', personName: 'Me' };
+    return newPlanDoc(owner, recordContext()).doc;
+  });
 
   // The document remembers the language too (I18N-1); local storage only makes the first paint right.
   useEffect(() => {
@@ -62,9 +69,9 @@ export function App({ storage }: { storage: Storage }) {
   return (
     <I18nProvider lang={lang} setLang={setLang}>
       {loadError ? (
-        <p className="load-state">{String(loadError)}</p>
+        <LoadError error={loadError} account={account} />
       ) : doc ? (
-        <Planner doc={doc} update={update} saveState={saveState} demo={storage.kind === 'memory'} />
+        <Planner doc={doc} update={update} saveState={saveState} flush={flush} account={account} />
       ) : (
         <LoadingState />
       )}
@@ -77,15 +84,31 @@ function LoadingState() {
   return <p className="load-state">{t('save.loading')}</p>;
 }
 
+function LoadError({ error, account }: { error: unknown; account: Account }) {
+  const { t } = useI18n();
+  return (
+    <div className="load-state" role="alert">
+      <p>{t('save.loadError')}</p>
+      <p className="detail">{error instanceof Error ? error.message : String(error)}</p>
+      {account.kind === 'google' && (
+        <button type="button" onClick={account.signOut}>
+          {t('auth.signOut')}
+        </button>
+      )}
+    </div>
+  );
+}
+
 interface PlannerProps {
   doc: PlanDoc;
   update: (change: (doc: PlanDoc) => PlanDoc) => void;
   saveState: SaveState;
-  demo: boolean;
+  flush: () => Promise<void>;
+  account: Account;
 }
 
-function Planner({ doc, update, saveState, demo }: PlannerProps) {
-  const { t, lang, setLang } = useI18n();
+function Planner({ doc, update, saveState, flush, account }: PlannerProps) {
+  const { t, lang } = useI18n();
   const { scheme, setScheme, mode, setMode } = useTheme();
   const [today] = useState(localToday);
   const [year, setYear] = useState(() => yearOf(today));
@@ -132,54 +155,55 @@ function Planner({ doc, update, saveState, demo }: PlannerProps) {
     }
   };
 
+  const [undo, setUndo] = useState<UndoOffer | null>(null);
+  const clearUndo = useCallback(() => setUndo(null), []);
   const remove = (blockId: string) => {
     setEditor(null);
     update((d) => deleteRecord(d, 'blocks', blockId, new Date().toISOString()));
+    setUndo({
+      id: Date.now(),
+      message: t('undo.deleted'),
+      undo: () => update((d) => restoreRecord(d, 'blocks', blockId, new Date().toISOString())),
+    });
   };
 
-  return (
-    <div className="app">
-      <header className="app-header">
-        <h1>{t('app.title')}</h1>
-        <nav className="year-nav" aria-label={t('year.label')}>
-          <button type="button" onClick={() => setYear((y) => y - 1)} aria-label={t('year.prev')}>
-            ‹
-          </button>
-          <span className="year" aria-live="polite">
-            {year}
-          </span>
-          <button type="button" onClick={() => setYear((y) => y + 1)} aria-label={t('year.next')}>
-            ›
-          </button>
-        </nav>
-        <output className={`save-state save-${demo ? 'demo' : saveState}`}>{demo ? t('app.demo') : t(`save.${saveState}`)}</output>
-        <label className="picker">
-          <span>{t('theme.scheme')}</span>
-          <select value={scheme} onChange={(e) => setScheme(e.target.value as (typeof SCHEMES)[number])}>
-            {SCHEMES.map((s) => (
-              <option key={s} value={s}>
-                {t(`theme.${s}`)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="picker">
-          <span>{t('theme.mode')}</span>
-          <select value={mode} onChange={(e) => setMode(e.target.value as Mode)}>
-            {(['auto', 'light', 'dark'] as const).map((m) => (
-              <option key={m} value={m}>
-                {t(`mode.${m}`)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button type="button" className="lang" onClick={() => setLang(lang === 'ro' ? 'en' : 'ro')} aria-label={t('lang.otherLabel')}>
-          {t('lang.other')}
-        </button>
-      </header>
+  const { ref: headerRef, hidden, height, hold } = useHideOnScroll<HTMLElement>();
+  const width = useWidthClass();
 
-      <main>
-        <Legend />
+  // "Today": jump to this year and scroll to today's week; also once on first load, like calendar apps do.
+  const [todayTick, setTodayTick] = useState(1);
+  const goToday = () => {
+    setYear(yearOf(today));
+    setTodayTick((n) => n + 1);
+  };
+  useEffect(() => {
+    if (!todayTick || year !== yearOf(today)) return;
+    const smooth = todayTick > 1 && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    hold(1500); // our own scroll: keep the header shown
+    const frame = requestAnimationFrame(() =>
+      document.querySelector(`[data-date="${today}"]`)?.scrollIntoView({ block: 'center', behavior: smooth ? 'smooth' : 'auto' }),
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [todayTick, year, today, hold]);
+
+  return (
+    <div className="app" style={{ '--header-offset': `${hidden ? 0 : height}px` } as CSSProperties}>
+      <Header
+        ref={headerRef}
+        year={year}
+        setYear={setYear}
+        onToday={goToday}
+        account={account}
+        saveState={saveState}
+        flush={flush}
+        theme={{ scheme, setScheme, mode, setMode }}
+        width={width}
+        hidden={hidden}
+      />
+      {account.kind === 'demo' && <DemoStrip account={account} />}
+
+      <main className="layout">
+        {width !== 'expanded' && <SidePane width={width} />}
         <Calendar
           key={year}
           year={year}
@@ -189,12 +213,17 @@ function Planner({ doc, update, saveState, demo }: PlannerProps) {
           onCreate={(start, end) => setEditor({ mode: 'new', start, end })}
           onOpen={openDay}
         />
+        {width === 'expanded' && <SidePane width={width} />}
       </main>
 
       <footer className="app-footer">
         <a href="privacy.html">{t('app.privacy')}</a>
+        <a href="terms.html">{t('app.terms')}</a>
         <a href="https://github.com/flriancu/vacation_planner">{t('app.source')}</a>
       </footer>
+
+      <UndoToast offer={undo} onDone={clearUndo} />
+      <Tooltips />
 
       {editor && (
         <BlockEditor

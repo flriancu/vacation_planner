@@ -74,6 +74,12 @@
   width: auto;
 }
 
+.editor .status-option:has(input:disabled) {
+  color: var(--muted);
+  opacity: 0.6;
+  cursor: help;
+}
+
 .summary {
   display: grid;
   gap: 0.2rem;
@@ -114,4 +120,139 @@
 
 .editor .spacer {
   flex: 1;
+}
+
+/* ---- Date range: one field and DayPicker (DateRangeFields), themed with the app's tokens ---- */
+.date-range {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.dp-field {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.dp-label {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.editor .dp-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.35rem 0.6rem;
+  text-align: left;
+  background: var(--bg);
+  font-size: 0.9rem;
+  line-height: 1.3;
+}
+
+.editor .dp-button > span:first-child::first-letter {
+  text-transform: uppercase;
+}
+
+.editor .dp-button.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.dp-icon {
+  flex-shrink: 0;
+}
+
+.dp-panel {
+  justify-self: center;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.dp-step {
+  margin: 0 0 0.25rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.dp-panel .rdp-root {
+  --rdp-accent-color: var(--leave);
+  --rdp-accent-background-color: color-mix(in srgb, var(--leave) var(--fill-planned), var(--surface));
+  --rdp-range_middle-background-color: var(--rdp-accent-background-color);
+  --rdp-range_start-date-background-color: var(--leave);
+  --rdp-range_end-date-background-color: var(--leave);
+  --rdp-range_start-color: var(--leave-fg);
+  --rdp-range_end-color: var(--leave-fg);
+  --rdp-today-color: var(--today-bg);
+  --rdp-day-height: 2.3rem;
+  --rdp-day-width: 2.3rem;
+  --rdp-day_button-height: 2.15rem;
+  --rdp-day_button-width: 2.15rem;
+  --rdp-day_button-border-radius: 6px;
+  --rdp-selected-border: 2px solid var(--leave);
+  --rdp-nav-height: 2.25rem;
+  color: var(--fg);
+  font-size: 0.9rem;
+}
+
+/* While choosing the last day the range is only a preview: a lighter step. */
+.dp-panel.choosing .rdp-root {
+  --rdp-range_middle-background-color: color-mix(in srgb, var(--leave) 14%, var(--surface));
+}
+
+.dp-panel .rdp-caption_label {
+  font-size: 0.95rem;
+  text-transform: capitalize;
+}
+
+.dp-panel .rdp-weekday {
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-transform: capitalize;
+}
+
+.dp-panel .rdp-chevron {
+  fill: var(--fg);
+}
+
+.dp-panel .rdp-day_button {
+  border: 0;
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+}
+
+/* Off-anyway tint and holiday dot, like the main calendar. Range colours win over the tint. */
+.dp-panel .rdp-day.dp-off {
+  background: var(--free);
+}
+
+.dp-panel .rdp-day.dp-holiday .rdp-day_button {
+  position: relative;
+  font-weight: 700;
+}
+
+.dp-panel .rdp-day.dp-holiday .rdp-day_button::after {
+  content: '';
+  position: absolute;
+  bottom: 3px;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  border-radius: 50%;
+  background: var(--holiday-mark);
+}
+
+.dp-panel .rdp-day.rdp-range_middle {
+  background: var(--rdp-range_middle-background-color);
+}
+
+.dp-panel .rdp-day.rdp-outside {
+  color: var(--muted);
 }

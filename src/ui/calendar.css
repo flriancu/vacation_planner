@@ -1,7 +1,23 @@
+/* The live region takes no space: the half-made-selection message floats at the bottom (like the
+   undo message), so the calendar never shifts when it appears. */
 .cal-help {
-  margin: 0 0 0.5rem;
-  font-size: 0.85rem;
-  color: var(--muted);
+  margin: 0;
+}
+
+.cal-pending {
+  position: fixed;
+  left: 50%;
+  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  z-index: 15;
+  transform: translateX(-50%);
+  max-width: calc(100vw - 32px);
+  padding: 0.5rem 1rem;
+  border-radius: 10px;
+  background: var(--fg);
+  color: var(--bg);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
+  font-size: 0.9rem;
+  text-align: center;
 }
 
 .calendar {
@@ -9,17 +25,24 @@
   -webkit-user-select: none;
 }
 
-/* One week: month name | Mon..Sun | holiday notes (CAL-1, CAL-5). */
+/* One week: month band | Mon..Sun (CAL-1). Width is capped; the space beside it is for panels. */
+.calendar {
+  --row-h: 2.75rem;
+  max-width: 46rem;
+}
+
 .week {
   display: grid;
-  grid-template-columns: 9.5rem repeat(7, minmax(2.6rem, 1fr)) minmax(8rem, 15rem);
+  grid-template-columns: 2rem repeat(7, minmax(2.6rem, 1fr));
 }
 
 .cal-head {
   position: sticky;
-  top: 3.2rem;
+  /* Right under the header while it shows, at the top while it's hidden (app.css). */
+  top: var(--header-offset, 0px);
   z-index: 4;
   background: var(--bg);
+  transition: top 0.2s ease;
 }
 
 .weekday {
@@ -31,23 +54,32 @@
 }
 
 .month-col {
-  padding: 0.35rem 0.5rem 0 0;
-  font-size: 0.9rem;
-  font-weight: 650;
+  position: relative;
 }
 
-.month-name {
-  text-transform: capitalize;
-}
-
-.notes {
+/* Month band (CAL-3): written along the month's weeks, read bottom to top, like a book spine. */
+.month-band {
+  position: absolute;
+  inset: 0 0 auto 0;
+  z-index: 1;
+  height: calc(var(--span) * var(--row-h));
   display: flex;
-  flex-direction: column;
+  align-items: center;
   justify-content: center;
-  gap: 0.1rem;
-  padding: 0.15rem 0.6rem;
-  font-size: 0.78rem;
-  color: var(--muted);
+  border-top: 2px solid var(--month-line);
+  font-size: 0.8rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.month-band.first {
+  border-top: 0;
+}
+
+.month-band > span {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  text-transform: capitalize;
 }
 
 /* Day kinds and fills (CAL-4, CAL-6); also used by the legend swatches. */
@@ -76,7 +108,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 2.75rem;
+  min-height: var(--row-h);
   cursor: pointer;
   box-shadow: inset 0 0 0 0.5px var(--line);
   font-variant-numeric: tabular-nums;
@@ -203,34 +235,13 @@
   border-left-width: 3px;
 }
 
-/* Phone (NF-2): seven day columns; month name and notes get their own lines. */
+/* Phone (NF-2): same layout, a little tighter. */
 @media (max-width: 700px) {
+  .calendar {
+    --row-h: 2.6rem;
+  }
+
   .week {
-    grid-template-columns: repeat(7, 1fr);
-  }
-
-  .month-col {
-    grid-column: 1 / -1;
-    padding: 0.6rem 0.25rem 0.15rem;
-  }
-
-  .notes {
-    grid-column: 1 / -1;
-    padding: 0.1rem 0.25rem 0.3rem;
-  }
-
-  .month-col:empty,
-  .notes:empty,
-  .cal-head .month-col,
-  .cal-head .notes {
-    display: none;
-  }
-
-  .cal-head {
-    top: 5.6rem;
-  }
-
-  .day {
-    min-height: 2.6rem;
+    grid-template-columns: 1.6rem repeat(7, 1fr);
   }
 }

@@ -9,6 +9,10 @@
  */
 
 :root {
+  /* Every control (buttons, selects, the language switch) shares these. */
+  --ctl-h: 2.125rem;
+  --ctl-radius: 8px;
+  --ctl-font: 0.875rem;
   color-scheme: light;
   font-family:
     system-ui,
@@ -172,11 +176,13 @@ body {
 button,
 select {
   font: inherit;
+  font-size: var(--ctl-font);
+  min-height: var(--ctl-h);
   color: var(--fg);
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 0.4rem 0.8rem;
+  border-radius: var(--ctl-radius);
+  padding: 0 0.8rem;
   cursor: pointer;
 }
 

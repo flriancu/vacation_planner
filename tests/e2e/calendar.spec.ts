@@ -30,7 +30,8 @@ test('shows the year with holidays, weekends and month names (CAL-1..5)', async 
   await expect(cell(page, '2027-01-06')).toHaveClass(/base-holiday/);
   await expect(cell(page, '2027-01-09')).toHaveClass(/base-weekend/);
   await expect(cell(page, '2027-03-01')).toHaveClass(/today/);
-  await expect(page.getByText('Boboteaza').first()).toBeVisible(); // also in January after
+  // Holiday names are in the tooltip, not on the calendar.
+  await expect(cell(page, '2027-01-06')).toHaveAttribute('data-tip', /Boboteaza/);
   await expect(page.getByText('ianuarie 2027')).toBeVisible();
   // The view starts mid-December before and ends mid-January after (CAL-2).
   await expect(cell(page, '2026-12-14')).toHaveClass(/out-of-year/);
@@ -47,21 +48,27 @@ test('creates, approves and deletes leave (CAL-6..9, BLK-4)', async ({ page, isM
   await dialog.getByRole('button', { name: 'Salvează' }).click();
   await expect(dialog).toBeHidden();
   await expect(cell(page, '2027-08-11')).toHaveClass(/fill-planned/);
-  await expect(cell(page, '2027-08-09')).toHaveAttribute('title', /Folosești 5 zile de concediu → ești liber 9 zile la rând/);
+  await expect(cell(page, '2027-08-09')).toHaveAttribute('data-tip', /Folosești 5 zile de concediu → ești liber 9 zile la rând/);
 
   await cell(page, '2027-08-10').click();
   const edit = page.getByRole('dialog', { name: 'Editează concediul' });
-  await expect(edit.getByRole('radio')).toHaveCount(3); // one step either way from "planned"
+  await expect(edit.getByRole('radio', { disabled: false })).toHaveCount(3); // one step either way from "planned"
   await edit.getByRole('radio', { name: 'Aprobat' }).check();
   await edit.getByRole('button', { name: 'Salvează' }).click();
   await expect(cell(page, '2027-08-11')).toHaveClass(/fill-approved/);
   await expect(cell(page, '2027-08-09').locator('.outline.st-approved')).toHaveCount(1);
 
   await cell(page, '2027-08-10').click();
-  page.once('dialog', (d) => void d.accept());
   await page.getByRole('dialog', { name: 'Editează concediul' }).getByRole('button', { name: 'Șterge' }).click();
   await expect(cell(page, '2027-08-11')).not.toHaveClass(/fill-/);
-  await expect(cell(page, '2027-08-09')).not.toHaveAttribute('title', /.+/);
+  // No "are you sure?": an undo message instead.
+  await expect(page.getByText('Concediul a fost șters.')).toBeVisible();
+  await page.getByRole('button', { name: 'Anulează' }).click();
+  await expect(cell(page, '2027-08-11')).toHaveClass(/fill-approved/);
+  await cell(page, '2027-08-10').click();
+  await page.getByRole('dialog', { name: 'Editează concediul' }).getByRole('button', { name: 'Șterge' }).click();
+  await expect(cell(page, '2027-08-11')).not.toHaveClass(/fill-/);
+  await expect(cell(page, '2027-08-09')).not.toHaveAttribute('data-tip', /.+/);
 });
 
 test('an idea is outlined but not filled, and costs only uncovered days', async ({ page, isMobile }) => {
@@ -92,17 +99,20 @@ test('selects with the keyboard (NF-6)', async ({ page, isMobile }) => {
   await page.keyboard.press('Shift+ArrowRight');
   await page.keyboard.press('Enter');
   const dialog = page.getByRole('dialog', { name: 'Concediu nou' });
-  await expect(dialog.getByLabel('De la', { exact: true })).toHaveValue('2027-03-01');
-  await expect(dialog.getByLabel('Până la', { exact: true })).toHaveValue('2027-03-03');
+  const dates = dialog.getByRole('button', { name: /^Perioada/ });
+  await expect(dates).toHaveAttribute('data-start', '2027-03-01');
+  await expect(dates).toHaveAttribute('data-end', '2027-03-03');
 });
 
 test('switches language and remembers it (I18N-1)', async ({ page }) => {
-  await page.getByRole('button', { name: 'Switch to English' }).click();
-  await expect(page.getByRole('heading', { name: 'Vacation planner' })).toBeVisible();
-  await expect(page.getByText('Epiphany').first()).toBeVisible();
+  await page.getByRole('button', { name: 'Setări' }).click();
+  await page.getByRole('button', { name: 'English' }).click();
+  await expect(page).toHaveTitle('Vacation planner');
+  await expect(cell(page, '2027-01-06')).toHaveAttribute('data-tip', /Epiphany/);
   await expect(page.getByText('January 2027')).toBeVisible();
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Vacation planner' })).toBeVisible();
+  await expect(page).toHaveTitle('Vacation planner');
+  await expect(page.getByRole('button', { name: 'Settings' })).toBeVisible();
 });
 
 test('moves between years', async ({ page }) => {
@@ -110,4 +120,108 @@ test('moves between years', async ({ page }) => {
   await expect(page.getByRole('navigation', { name: 'Anul' })).toContainText('2028');
   await expect(cell(page, '2028-12-25')).toHaveClass(/base-holiday/);
   await expect(cell(page, '2026-12-14')).toHaveCount(0);
+});
+
+test('signed out, the demo offers Google sign-in (AUTH-1, AUTH-3)', async ({ page, isMobile }) => {
+  await expect(page.getByText(/^Mod demo: ce adaugi aici nu se salvează\./)).toBeVisible();
+  // Phones get the short label so the header fits one row.
+  await expect(page.getByRole('button', { name: isMobile ? 'Conectează-te' : 'Conectează-te cu Google', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Confidențialitate' })).toHaveAttribute('href', 'privacy.html');
+  await expect(page.getByRole('link', { name: 'Condiții de utilizare' })).toHaveAttribute('href', 'terms.html');
+});
+
+test('the privacy and terms pages share the language choice with the app', async ({ page }) => {
+  await page.goto('./privacy.html');
+  // The test browser is English, so the page starts in English; pick Romanian first.
+  await page.getByRole('button', { name: 'Română' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Confidențialitate');
+  await page.getByRole('button', { name: 'English' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Privacy');
+  // One language choice everywhere: the terms page and the app follow it.
+  await page.getByRole('link', { name: 'Terms of use' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Terms of use');
+  await expect(page.getByText('check with HR before you book your leave')).toBeVisible();
+  await page.getByRole('link', { name: '← Back to the app' }).click();
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await expect(page.getByRole('button', { name: 'English' })).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('Today jumps back to the current year and week', async ({ page }) => {
+  await page.getByRole('button', { name: 'Anul următor' }).click();
+  await expect(page.getByRole('navigation', { name: 'Anul' })).toContainText('2028');
+  await page.getByRole('button', { name: 'Azi' }).click();
+  await expect(page.getByRole('navigation', { name: 'Anul' })).toContainText('2027');
+  await expect(cell(page, '2027-03-01')).toBeInViewport();
+});
+
+test('settings and the demo notice are reachable, and the notice can be closed', async ({ page }) => {
+  await expect(page.getByRole('status').filter({ hasText: 'Demo' })).toHaveAttribute('data-tip', 'Demo: nu se salvează');
+  await page.getByRole('button', { name: 'Setări' }).click();
+  await expect(page.getByLabel('Culori')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByLabel('Culori')).toBeHidden();
+  await page.getByRole('button', { name: 'Închide' }).click();
+  await expect(page.getByText(/^Mod demo: ce adaugi aici/)).toBeHidden();
+});
+
+test('header labels never wrap, even in a narrow window (one row, one sign-in action)', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'desktop widths');
+  await page.addInitScript(() =>
+    localStorage.setItem('vacation-planner.account', JSON.stringify({ email: 'someone@gmail.com', name: 'Ana' })),
+  );
+  for (const width of [860, 1000, 1280]) {
+    await page.setViewportSize({ width, height: 700 });
+    await page.goto('./');
+    const heights = await page
+      .locator('.app-header button, .app-header .status')
+      .evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().height)));
+    expect(Math.max(...heights), `width ${width}`).toBeLessThanOrEqual(36); // --ctl-h is 34 px
+    expect(await page.locator('.app-header').evaluate((el) => el.getBoundingClientRect().height)).toBeLessThan(60);
+    await expect(page.getByRole('button', { name: /^Continuă ca Ana$/ })).toHaveCount(1);
+  }
+});
+
+test('the editor date picker: first day, then last day, with a preview (keyboard too)', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'needs a keyboard');
+  await cell(page, '2027-01-04').click();
+  await cell(page, '2027-01-05').click();
+  const dialog = page.getByRole('dialog', { name: 'Concediu nou' });
+  const dates = dialog.getByRole('button', { name: /^Perioada/ });
+  await expect(dates).toContainText(/luni 4 ianuarie 2027 – marți 5 ianuarie 2027/i);
+  await dates.click();
+  const picker = dialog.getByRole('dialog', { name: 'Alege perioada' });
+  await expect(picker).toContainText('Alege prima zi.');
+  await expect(picker.locator('[data-day="2027-01-06"]')).toHaveClass(/dp-holiday/);
+  await page.keyboard.press('Enter'); // first day: 4 Jan (focus starts on the current start)
+  await expect(picker).toContainText(/Prima zi: luni 4 ianuarie 2027\. Alege acum ultima zi\./);
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight'); // 7 Jan, previewed
+  await expect(picker.locator('[data-day="2027-01-06"]')).toHaveClass(/rdp-range_middle/);
+  await page.keyboard.press('Enter');
+  await expect(picker).toBeHidden();
+  await expect(dates).toHaveAttribute('data-end', '2027-01-07');
+  // Clicking the last day before the first works too; Escape cancels the picker, not the editor.
+  await dates.click();
+  await picker.locator('[data-day="2027-01-15"]').click();
+  await picker.locator('[data-day="2027-01-11"]').click();
+  await expect(dates).toHaveAttribute('data-start', '2027-01-11');
+  await expect(dates).toHaveAttribute('data-end', '2027-01-15');
+  await dates.click();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeVisible();
+  await expect(dates).toHaveAttribute('data-start', '2027-01-11');
+});
+
+test('tooltips are the app own ones, also above the editor, and Escape dismisses them', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'hover');
+  const tip = page.getByRole('tooltip');
+  // The page first jumps to today, and scrolling hides tooltips; hover again until it settles.
+  await expect(async () => {
+    await page.mouse.move(0, 0); // a fresh hover each try
+    await cell(page, '2027-01-06').hover();
+    await expect(tip).toHaveText('Boboteaza', { timeout: 1000 });
+  }).toPass();
+  await page.keyboard.press('Escape');
+  await expect(tip).toBeHidden();
 });

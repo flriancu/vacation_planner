@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { merge } from '../domain/merge';
 import type { PlanDoc } from '../domain/schema';
+import { AuthExpiredError } from '../google/auth';
 import type { Storage } from '../storage/Storage';
 
-export type SaveState = 'saved' | 'saving' | 'error';
+/** `signin`: the Google session expired; changes are kept in memory until the user reconnects. */
+export type SaveState = 'saved' | 'saving' | 'error' | 'signin';
 
 const SAVE_DELAY_MS = 1500;
+/** Conflict → reload → merge → save again; more rounds than this means something is wrong. */
+const MAX_ROUNDS = 3;
 
 interface Opened {
   doc: PlanDoc;
@@ -25,8 +30,9 @@ async function openOwn(storage: Storage, init: () => PlanDoc): Promise<Opened> {
 }
 
 /**
- * The open plan document, with auto-save (NF-4): saves 1.5 s after the last
- * change, and at once when the page is hidden. Saves never overlap.
+ * The open plan document, with auto-save (NF-4): saves 1.5 s after the last change, and at
+ * once when the page is hidden. Saves never overlap. When another device saved in between,
+ * the remote version is merged record by record and saved again (DESIGN §4.3).
  */
 export function useDocument(storage: Storage, init: () => PlanDoc) {
   const [doc, setDoc] = useState<PlanDoc | null>(null);
@@ -62,23 +68,34 @@ export function useDocument(storage: Storage, init: () => PlanDoc) {
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [storage]);
 
-  const flush = useCallback(() => {
-    window.clearTimeout(timer.current);
-    chain.current = chain.current.then(async () => {
+  const saveRounds = useCallback(async () => {
+    for (let round = 0; round < MAX_ROUNDS; round++) {
       const toSave = current.current;
       if (!toSave || toSave === saved.current) return;
-      try {
-        const result = await storage.save(calendarId.current, toSave, version.current);
-        if (!result.ok) throw new Error('conflict'); // merging arrives with Drive storage (milestone 3)
+      const result = await storage.save(calendarId.current, toSave, version.current);
+      if (result.ok) {
         version.current = result.version;
         saved.current = toSave;
         setSaveState(current.current === toSave ? 'saved' : 'saving');
-      } catch {
-        setSaveState('error');
+        return;
       }
-    });
-    return chain.current;
+      // Another device saved first: take its version, keep my newer records, try again.
+      const remote = await storage.load(calendarId.current);
+      const merged = merge(current.current!, remote.doc);
+      version.current = remote.version;
+      current.current = merged;
+      setDoc(merged);
+    }
+    throw new Error('save kept conflicting');
   }, [storage]);
+
+  const flush = useCallback(() => {
+    window.clearTimeout(timer.current);
+    chain.current = chain.current.then(() =>
+      saveRounds().catch((e: unknown) => setSaveState(e instanceof AuthExpiredError ? 'signin' : 'error')),
+    );
+    return chain.current;
+  }, [saveRounds]);
 
   const update = useCallback(
     (change: (doc: PlanDoc) => PlanDoc) => {

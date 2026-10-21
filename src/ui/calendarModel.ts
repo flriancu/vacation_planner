@@ -1,6 +1,4 @@
-import type { DayInfo } from '../domain/calendar';
 import { addDays, makeDate, weekday, type ISODate } from '../domain/dates';
-import type { Holiday } from '../domain/holidays';
 
 /**
  * The weeks shown for `year` (CAL-2): from the week of 15 Dec before to the
@@ -15,23 +13,26 @@ export function viewRange(year: number): { from: ISODate; to: ISODate } {
 export interface WeekModel {
   monday: ISODate;
   days: ISODate[];
-  /** First day of the month named beside this week: the month starting in it, or the first week's month. */
+  /**
+   * Set on the first week of a month band: the first of that month. A band is the run of weeks
+   * whose Monday falls in the month, so it starts where the stepped month line meets the left edge.
+   */
   month?: ISODate;
-  /** Holidays in this week, for the notes column (CAL-5). */
-  holidays: Holiday[];
+  /** Length of the band in weeks (on the band's first week only). */
+  span?: number;
 }
 
-export function buildWeeks(from: ISODate, to: ISODate, days: Map<ISODate, DayInfo>): WeekModel[] {
+export function buildWeeks(from: ISODate, to: ISODate): WeekModel[] {
   const weeks: WeekModel[] = [];
   for (let monday = from; monday <= to; monday = addDays(monday, 7)) {
-    const week = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
-    const first = week.find((d) => d.endsWith('-01')) ?? (weeks.length === 0 ? `${monday.slice(0, 7)}-01` : undefined);
-    weeks.push({
-      monday,
-      days: week,
-      ...(first && { month: first }),
-      holidays: week.flatMap((d) => days.get(d)?.holiday ?? []),
-    });
+    const days = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
+    const startsBand = weeks.length === 0 || weeks.at(-1)!.monday.slice(0, 7) !== monday.slice(0, 7);
+    weeks.push({ monday, days, ...(startsBand && { month: `${monday.slice(0, 7)}-01`, span: 0 }) });
+  }
+  let band: WeekModel | undefined;
+  for (const w of weeks) {
+    if (w.month) band = w;
+    band!.span! += 1;
   }
   return weeks;
 }

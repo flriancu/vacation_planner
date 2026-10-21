@@ -1,0 +1,105 @@
+/* Shared by privacy.html and terms.html. The language switch matches the app's (src/ui/app.css .langs). */
+:root {
+  --bg: #fffafc;
+  --surface: #ffffff;
+  --fg: #2a1f26;
+  --muted: #6f5e68;
+  --line: #eadde4;
+  --accent: #b0185a;
+  --accent-fg: #ffffff;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  line-height: 1.55;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161216;
+    --surface: #1f191e;
+    --fg: #f4eaf0;
+    --muted: #b8a5b0;
+    --line: #3a2e36;
+    --accent: #f27ab2;
+    --accent-fg: #1a0d14;
+    color-scheme: dark;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+main {
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: 1.5rem 16px 4rem;
+}
+
+.langs {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 2px;
+  height: 2.125rem;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.langs button {
+  font: inherit;
+  font-size: 0.875rem;
+  border: 0;
+  border-radius: 5px;
+  padding: 0 0.75rem;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.langs button[aria-pressed='true'] {
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-weight: 700;
+}
+
+.langs button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+h1 {
+  font-size: 1.6rem;
+  margin: 1.25rem 0 0.25rem;
+}
+
+h2 {
+  font-size: 1.15rem;
+  margin: 2rem 0 0.5rem;
+}
+
+p,
+li {
+  max-width: 65ch;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+a {
+  color: var(--accent);
+}
+
+nav.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  margin-top: 2rem;
+}

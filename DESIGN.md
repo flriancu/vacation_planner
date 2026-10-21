@@ -173,6 +173,8 @@ Same interface, kept in memory and optionally seeded from a JSON file. Used:
 
 - The GIS **token client** (`google.accounts.oauth2.initTokenClient`) asks for `openid email profile https://www.googleapis.com/auth/drive.file` at sign-in.
 - The Google account id (`sub`) and display name come from the `userinfo` endpoint.
+- `google/auth.ts` preloads the GIS script on page load, so the popup opens inside the click (browsers block popups that aren't). The session (token, expiry, user) is kept in `sessionStorage`: a reload in the same tab stays signed in until the token expires; a new tab or visit takes one click ("Continuă ca …", the last account is remembered in `localStorage` as a hint only). Never stored in `localStorage`.
+- `ui/Root.tsx` owns sign-in: signed out → `MemoryStorage` demo; signed in → `DriveStorage(() => auth.accessToken())`, remounting `App` per account. `accessToken()` throws `AuthExpiredError` near expiry; `useDocument` then shows "reconnect", keeps the unsaved document in memory and saves after the click.
 - Access tokens last about 1 h. Before one expires, the app asks again with `prompt: ''`, which normally happens without showing anything. If it fails, a "Sign in again" banner appears; unsaved changes stay in memory and are saved after signing in again.
 - Calendar push (IO-3) calls `requestAccessToken` again with `include_granted_scopes: true` and adds `https://www.googleapis.com/auth/calendar.events`. This only happens the first time I click "push".
 
@@ -257,9 +259,18 @@ The floating and excused balances use the same formulas with their quotas and no
   - a CSS grid of week rows (7 day columns, plus a month column and a notes column on desktop);
   - month borders drawn per day cell from "is the first week of the month / first day of the month";
   - block outlines drawn per day cell: a cell draws an edge wherever its neighbour (the day before/after in the same week, or 7 days above/below) is outside the block. That traces the same outline as the old sheet's borders, with no measuring and no redraw on resize. Several blocks on one day are nested layers, 3 px apart;
-  - on phone, the month name and the notes column fold into their own lines above and below the week.
+  - months are a vertical band (2 rem; 1.6 rem on phone) in the first column, one per run of weeks whose Monday is in the month (`buildWeeks` gives `month` + `span`); the band is absolutely positioned and `span × --row-h` tall, so every row has the same fixed height;
+  - no holiday-name column: names are in the cell's `title`/`aria-label` and the hint line; the calendar is capped at 46 rem wide, leaving room for side panels.
 - **Selecting days (CAL-8):** pointer events (drag) on desktop; tap start, tap end on touch; Shift+arrow keys on keyboard (NF-6).
-- **Layout:** desktop = calendar + a right sidebar (Balance, Swap reminders, Suggestions); phone = calendar + a bottom sheet with the same three tabs.
+- **Layout (CAL-12), from a research pass over Material 3, Apple HIG, Fluent 2, NN/g and the big calendar apps:**
+  - width classes (`ui/useLayout.ts`): compact < 600 px, medium < 1000 px, expanded ≥ 1000 px;
+  - header (`ui/Header.tsx`), one row: title · ‹ year › · Azi, then at most three groups on the right (HIG toolbars, M3 app bars): save-status indicator (NN/g: a lasting state is an indicator, in one place), Setări menu (rarely changed preferences behind one click: HIG settings, NN/g progressive disclosure), account slot (same place signed in or out: "Conectează-te cu Google" ↔ initial avatar with a menu). Compact: no title, short labels, Setări inside the account menu (or a ⋯ menu signed out);
+  - the header hides on scroll down and returns on scroll up (NN/g partially persistent header); `--header-offset` keeps the weekday row and the pane just under it; scrolls the app makes itself (Azi, first load) don't hide it;
+  - expanded: a supporting pane on the right, 18 rem (M3 canonical "supporting pane"), sticky: legend (Carbon: a legend beside dense data when labels can't go in the cells), closable hint; later balance and suggestions. Medium: legend as one row above the calendar; compact: behind a "Legendă" disclosure;
+  - one sign-in action, in the account slot: "Conectează-te cu Google", or "Continuă ca {first name}" for a returning browser (the hint keeps email + first name). Signed out, a thin strip under the header (GOV.UK phase banner) only explains the demo, plus a "Folosește alt cont" link for a returning browser;
+  - header controls never wrap their labels (HIG, M3): they keep their size, the title truncates first, and the demo status shows "Demo" below 1200 px (full text in the tooltip);
+  - menus (`ui/Menu.tsx`) are disclosures (button + panel with form controls), close on Escape and outside click;
+  - phones use 44 px controls (HIG/M3 touch targets).
 - **Visual encoding (CAL-4, CAL-6, CAL-11)**, checked against research (sources in the commit that introduced it):
   - *Status is ordered* (idea < planned < approved), so it is a **lightness ramp**: faint tint (9 %) → light fill → full accent. Lightness/value is the channel for ordered data (Bertin; Munzner's magnitude channels; ColorBrewer sequential schemes), and "lighter = less certain" was among the most intuitive cues in MacEachren et al. 2012. Hue is used only to separate "my leave" from "off anyway", never for order.
   - *Line style is the redundant cue*: dashed (idea) / solid (planned) / thick solid (approved). Dashing was the preferred uncertainty cue for lines (Boukhelifa et al. 2012) and gives a non-colour signal (WCAG 1.4.1).

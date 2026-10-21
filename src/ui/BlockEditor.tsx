@@ -7,6 +7,7 @@ import { addRecord, live, STATUS_RANK, typeByKey, type Block, type BlockStatus, 
 import { swapReminders } from '../domain/swaps';
 import { useI18n } from '../i18n';
 import { describeBlock } from './describe';
+import { DateRangeFields } from './DateRangeFields';
 import './editor.css';
 
 export type EditorTarget = { mode: 'new'; start: ISODate; end: ISODate } | { mode: 'edit'; blockId: string };
@@ -58,10 +59,11 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
   const type = doc.leaveTypes[draft.typeId]!;
   const valid = draft.start !== '' && draft.end !== '' && draft.start <= draft.end;
 
-  // BLK-4: an existing block moves one stage at a time; types without approval stop at "planned".
-  const allowed = STATUSES.filter(
-    (s) => (type.needsApproval || s !== 'approved') && (!original || Math.abs(STATUS_RANK[s] - STATUS_RANK[original.status]) <= 1),
-  );
+  // BLK-4: types without approval stop at "planned"; an existing block moves one stage at a time,
+  // so the stage two steps away is shown but disabled (with the reason), not hidden.
+  const shown = STATUSES.filter((s) => type.needsApproval || s !== 'approved');
+  const reachable = (s: BlockStatus) => !original || Math.abs(STATUS_RANK[s] - STATUS_RANK[original.status]) <= 1;
+  const datesChanged = !!original && (original.start !== draft.start || original.end !== draft.end);
 
   const preview = useMemo(() => {
     if (!valid) return null;
@@ -100,14 +102,11 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!valid) return;
-    const datesChanged = original && (original.start !== draft.start || original.end !== draft.end);
-    if (original?.status === 'approved' && datesChanged && !window.confirm(t('editor.confirmApprovedDates'))) return;
     onSave({ ...draft, ...(type.key !== 'swap' && { swapFor: undefined }) });
   };
 
-  const remove = () => {
-    if (original && window.confirm(t('editor.confirmDelete'))) onDelete(original.id);
-  };
+  // No "are you sure?": the delete can be undone from the message that follows (App).
+  const remove = () => original && onDelete(original.id);
 
   return (
     <dialog ref={dialog} className="editor" aria-labelledby="editor-title" onClose={onClose}>
@@ -127,24 +126,27 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
 
         <fieldset className="statuses">
           <legend>{t('editor.status')}</legend>
-          {allowed.map((s) => (
-            <label key={s} className={`status-option st-${s}`}>
-              <input type="radio" name="status" value={s} checked={draft.status === s} onChange={() => set({ status: s })} />
+          {shown.map((s) => (
+            <label key={s} className={`status-option st-${s}`} data-tip={reachable(s) ? undefined : t('editor.oneStep')}>
+              <input
+                type="radio"
+                name="status"
+                value={s}
+                checked={draft.status === s}
+                disabled={!reachable(s)}
+                onChange={() => set({ status: s })}
+              />
               {t(`status.${s}`)}
             </label>
           ))}
         </fieldset>
 
-        <div className="dates">
-          <label>
-            {t('editor.start')}
-            <input type="date" required value={draft.start} onChange={(e) => set({ start: e.target.value })} />
-          </label>
-          <label>
-            {t('editor.end')}
-            <input type="date" required value={draft.end} onChange={(e) => set({ end: e.target.value })} />
-          </label>
-        </div>
+        <DateRangeFields
+          start={draft.start}
+          end={draft.end}
+          onChange={(start, end) => set({ start, end })}
+          overrides={live(doc.holidayOverrides)}
+        />
 
         {type.key === 'swap' && (
           <label>
@@ -174,6 +176,7 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
             </span>
           )}
           {preview?.overlap && draft.status !== 'idea' && <span className="warning">{t('editor.warnOverlap')}</span>}
+          {original?.status === 'approved' && datesChanged && <span className="warning">{t('editor.warnApprovedDates')}</span>}
         </p>
 
         {alsoHere.length > 0 && (
