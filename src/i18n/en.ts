@@ -3,6 +3,8 @@ import type { MessageKey } from './ro';
 /** English strings. A missing or extra key fails type-checking. */
 export const en: Record<MessageKey, string> = {
   'app.title': 'Vacation planner',
+  'app.privacy': 'Privacy',
+  'app.source': 'Source code',
   'app.demo': 'Demo mode: changes are not saved.',
   'save.saved': 'Saved',
   'save.saving': 'Saving…',

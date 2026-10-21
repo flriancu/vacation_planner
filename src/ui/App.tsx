@@ -191,6 +191,11 @@ function Planner({ doc, update, saveState, demo }: PlannerProps) {
         />
       </main>
 
+      <footer className="app-footer">
+        <a href="privacy.html">{t('app.privacy')}</a>
+        <a href="https://github.com/flriancu/vacation_planner">{t('app.source')}</a>
+      </footer>
+
       {editor && (
         <BlockEditor
           key={editor.mode === 'edit' ? editor.blockId : `${editor.start}|${editor.end}`}

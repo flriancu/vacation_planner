@@ -111,3 +111,16 @@ main {
 .swatch.fill-none {
   background: var(--surface);
 }
+
+.app-footer {
+  display: flex;
+  gap: 1.25rem;
+  justify-content: center;
+  padding: 1.5rem 16px 2rem;
+  font-size: 0.85rem;
+  border-top: 1px solid var(--line);
+}
+
+.app-footer a {
+  color: var(--muted);
+}

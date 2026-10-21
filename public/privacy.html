@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="ro">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Confidențialitate · Planificator de concediu</title>
+    <style>
+      :root {
+        --bg: #fffafc;
+        --fg: #2a1f26;
+        --muted: #6f5e68;
+        --accent: #b0185a;
+        font-family:
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+        line-height: 1.55;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #161216;
+          --fg: #f4eaf0;
+          --muted: #b8a5b0;
+          --accent: #f27ab2;
+        }
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+      }
+      main {
+        max-width: 42rem;
+        margin: 0 auto;
+        padding: 2rem 16px 4rem;
+      }
+      h1 {
+        font-size: 1.6rem;
+        margin: 0 0 0.25rem;
+      }
+      h2 {
+        font-size: 1.15rem;
+        margin: 2.5rem 0 0.5rem;
+      }
+      p,
+      li {
+        max-width: 65ch;
+      }
+      .muted {
+        color: var(--muted);
+      }
+      a {
+        color: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Confidențialitate</h1>
+      <p class="muted">Planificator de concediu · actualizat 21 octombrie 2026</p>
+
+      <p>Aplicația nu are server propriu și nu colectează date despre tine.</p>
+      <ul>
+        <li>
+          Planul tău (concedii, setări) se salvează într-un singur fișier în <strong>Google Drive-ul tău</strong>. Doar tu (și cei cu care
+          alegi să-l partajezi în Drive) îl poți vedea.
+        </li>
+        <li>
+          Aplicația cere permisiunea Google <code>drive.file</code>: poate citi și scrie <strong>doar fișierele create de ea</strong> sau pe
+          care le deschizi explicit cu ea. Nu vede restul Drive-ului.
+        </li>
+        <li>
+          De la contul Google folosește doar numele și adresa de e-mail, ca să-ți arate cu ce cont ești conectat. Nu le trimite nicăieri.
+        </li>
+        <li>Nu există reclame, analytics sau urmărire. Browserul păstrează local doar preferințe (limba, culorile).</li>
+        <li>
+          Poți retrage oricând accesul din <a href="https://myaccount.google.com/permissions">permisiunile contului Google</a>; fișierul
+          rămâne în Drive-ul tău.
+        </li>
+      </ul>
+      <p>
+        Codul sursă este public: <a href="https://github.com/flriancu/vacation_planner">github.com/flriancu/vacation_planner</a>. Întrebări:
+        deschide un issue acolo.
+      </p>
+
+      <h2 lang="en">Privacy (English)</h2>
+      <div lang="en">
+        <p>The app has no server of its own and collects no data about you.</p>
+        <ul>
+          <li>
+            Your plan (leave, settings) is saved as one file in <strong>your own Google Drive</strong>. Only you, and anyone you choose to
+            share it with in Drive, can see it.
+          </li>
+          <li>
+            The app asks for Google's <code>drive.file</code> permission: it can read and write <strong>only files it created</strong> or
+            that you explicitly open with it. It cannot see the rest of your Drive.
+          </li>
+          <li>
+            From your Google account it uses only your name and email address, to show which account you're signed in with. It sends them
+            nowhere.
+          </li>
+          <li>No ads, analytics or tracking. The browser keeps only preferences (language, colours) locally.</li>
+          <li>
+            You can remove access at any time in your <a href="https://myaccount.google.com/permissions">Google account permissions</a>; the
+            file stays in your Drive.
+          </li>
+        </ul>
+        <p>
+          The source code is public: <a href="https://github.com/flriancu/vacation_planner">github.com/flriancu/vacation_planner</a>.
+          Questions: open an issue there.
+        </p>
+      </div>
+      <p><a href="./">← Înapoi la aplicație / Back to the app</a></p>
+    </main>
+  </body>
+</html>

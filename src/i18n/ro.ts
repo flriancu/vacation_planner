@@ -1,6 +1,8 @@
 /** Romanian strings: the source of truth for the keys (I18N-1). `{name}` marks a parameter. */
 export const ro = {
   'app.title': 'Planificator de concediu',
+  'app.privacy': 'Confidențialitate',
+  'app.source': 'Cod sursă',
   'app.demo': 'Mod demo: modificările nu se salvează.',
   'save.saved': 'Salvat',
   'save.saving': 'Se salvează…',
