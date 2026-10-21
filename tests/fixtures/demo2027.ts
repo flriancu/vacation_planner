@@ -11,7 +11,7 @@ import { DocBuilder } from './builder';
  * - Sun 15 Aug: swap on Mon 16 Aug.
  * - Sat 25 Dec: swap on Fri 24 Dec.
  * - Sun 26 Dec: dismissed (HR gave a floating day instead).
- * Plus employer bridge days 28–31 Dec and one of two floating days on Mon 31 May.
+ * Plus office-closed days 28–31 Dec and one of two floating days on Mon 31 May.
  */
 export function demo2027(): DocBuilder {
   const b = new DocBuilder();
@@ -22,7 +22,7 @@ export function demo2027(): DocBuilder {
   b.block('swap', '2027-12-24', '2027-12-24', 'approved', { swapFor: '2027-12-25' });
   b.dismissSwap('2027-12-26');
 
-  b.block('employer', '2027-12-28', '2027-12-31');
+  b.block('closed', '2027-12-28', '2027-12-31');
   b.block('floating', '2027-05-31', '2027-05-31', 'planned');
   return b;
 }

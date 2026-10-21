@@ -13,11 +13,11 @@ export interface DayInfo {
   blocks: Block[];
   /** Not a working day: weekend, holiday, or covered by a planned/approved block. */
   off: boolean;
-  /** Can start a bridge: a holiday, or a planned/approved floating, swap or employer day (DESIGN §6.3). */
+  /** Can start a bridge: a holiday, or a planned/approved floating, swap or office-closed day (DESIGN §6.3). */
   anchor: boolean;
 }
 
-const ANCHOR_TYPES: ReadonlySet<LeaveTypeKey> = new Set(['floating', 'swap', 'employer']);
+const ANCHOR_TYPES: ReadonlySet<LeaveTypeKey> = new Set(['floating', 'swap', 'closed']);
 
 /** Day-by-day view of one person's calendar from `from` to `to` (DESIGN §6.2). */
 export function buildDays(doc: PlanDoc, personId: string, from: ISODate, to: ISODate): Map<ISODate, DayInfo> {
@@ -55,7 +55,7 @@ export function personBlocks(doc: PlanDoc, personId: string): Block[] {
 export function blockBudget(doc: PlanDoc, block: Block, year: number): Budget {
   const type = doc.leaveTypes[block.typeId];
   if (!type) return 'none';
-  if (type.key === 'employer' && getYearSettings(doc, block.personId, year)?.employerCountsAgainstAnnual) return 'annual';
+  if (type.key === 'closed' && getYearSettings(doc, block.personId, year)?.closedCountsAgainstAnnual) return 'annual';
   return type.budget;
 }
 

@@ -9,7 +9,7 @@ const DAY_MONTH: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'long' };
 const DAY_MONTH_YEAR: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'long', year: 'numeric' };
 
 export interface BlockDescription {
-  /** "Folosești 1 zi de concediu"; absent for types that spend nothing (swap, employer, sick…). */
+  /** "Folosești 1 zi de concediu"; absent for types that spend nothing (swap, office closed, sick…). */
   spend?: string;
   /** "→ ești liber 5 zile la rând: vineri 27 noiembrie – marți 1 decembrie" */
   get: string;

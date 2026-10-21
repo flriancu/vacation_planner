@@ -23,7 +23,7 @@ export interface Person extends Meta {
   hasAccount: boolean;
 }
 
-export type LeaveTypeKey = 'annual' | 'floating' | 'excused' | 'swap' | 'employer' | 'special' | 'sick' | 'comp';
+export type LeaveTypeKey = 'annual' | 'floating' | 'excused' | 'swap' | 'closed' | 'special' | 'sick' | 'unpaid';
 export type Budget = 'annual' | 'floating' | 'excused' | 'none';
 /** Budgets with a per-year quota that expires on 31 Dec (LT-6). */
 export type ExpiringBudget = 'floating' | 'excused';
@@ -65,7 +65,7 @@ export interface YearSettings extends Meta {
   annualOpening: number;
   floatingQuota: number;
   excusedQuota: number;
-  employerCountsAgainstAnnual: boolean;
+  closedCountsAgainstAnnual: boolean;
 }
 
 export interface Adjustment extends Meta {
@@ -128,15 +128,15 @@ export const BUILTIN_TYPES: readonly Omit<LeaveType, keyof Meta>[] = [
   { key: 'excused', name: { ro: 'Învoire', en: 'Excused leave' }, color: '#f7c6dc', budget: 'excused', needsApproval: true },
   { key: 'swap', name: { ro: 'Zi compensatorie', en: 'Swap day' }, color: '#ff96c4', budget: 'none', needsApproval: false },
   {
-    key: 'employer',
-    name: { ro: 'Zi liberă de la angajator', en: 'Employer bridge day' },
+    key: 'closed',
+    name: { ro: 'Birou închis', en: 'Office closed' },
     color: '#ff96c4',
     budget: 'none',
     needsApproval: false,
   },
   { key: 'special', name: { ro: 'Eveniment special', en: 'Special event' }, color: '#b48ce0', budget: 'none', needsApproval: true },
   { key: 'sick', name: { ro: 'Concediu medical', en: 'Sick leave' }, color: '#8cb4e0', budget: 'none', needsApproval: false },
-  { key: 'comp', name: { ro: 'Recuperare / fără plată', en: 'Comp / unpaid' }, color: '#a0a0a0', budget: 'none', needsApproval: true },
+  { key: 'unpaid', name: { ro: 'Concediu fără plată', en: 'Unpaid leave' }, color: '#a0a0a0', budget: 'none', needsApproval: true },
 ];
 
 export function live<T extends Meta>(collection: Record<string, T>): T[] {

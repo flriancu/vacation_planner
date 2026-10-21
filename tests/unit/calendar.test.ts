@@ -4,7 +4,7 @@ import { DocBuilder } from '../fixtures/builder';
 import { demo2027 } from '../fixtures/demo2027';
 
 describe('buildDays', () => {
-  it('classifies the demo year: holidays, weekends, swap, employer and floating days', () => {
+  it('classifies the demo year: holidays, weekends, swap, office-closed and floating days', () => {
     const { doc, personId } = demo2027();
     const days = buildDays(doc, personId, '2026-12-31', '2028-01-03');
     const kind = (d: string) => {
@@ -18,11 +18,11 @@ describe('buildDays', () => {
     expect(kind('2027-01-05')).toBe('work');
     expect(kind('2027-05-31')).toBe('work off anchor'); // floating day
     expect(kind('2027-12-27')).toBe('work'); // the dismissed 26 Dec swap
-    expect(kind('2027-12-28')).toBe('work off anchor'); // employer day
+    expect(kind('2027-12-28')).toBe('work off anchor'); // office-closed day
     expect(kind('2028-01-03')).toBe('work');
   });
 
-  it('orders blocks by status, ignores ideas for "off", and anchors on employer-type days', () => {
+  it('orders blocks by status, ignores ideas for "off", and anchors on floating, swap and office-closed days', () => {
     const b = new DocBuilder();
     b.block('annual', '2025-03-03', '2025-03-07', 'idea');
     b.block('annual', '2025-03-05', '2025-03-05', 'planned');
@@ -50,10 +50,10 @@ describe('buildDays', () => {
 });
 
 describe('blockBudget', () => {
-  it('charges employer days to annual leave only in years set that way (LT-3)', () => {
+  it('charges office-closed days to annual leave only in years set that way (LT-3)', () => {
     const b = new DocBuilder();
-    b.year(2028, { employerCountsAgainstAnnual: true });
-    const block = b.block('employer', '2028-12-27');
+    b.year(2028, { closedCountsAgainstAnnual: true });
+    const block = b.block('closed', '2028-12-27');
     expect(blockBudget(b.doc, block, 2028)).toBe('annual');
     expect(blockBudget(b.doc, block, 2029)).toBe('none');
     expect(blockBudget(b.doc, b.block('floating', '2028-06-02'), 2028)).toBe('floating');

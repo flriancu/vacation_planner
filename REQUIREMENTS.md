@@ -5,7 +5,7 @@ Source of truth for the current workflow: my old hand-made spreadsheet (private,
 
 ## 1. Goal
 
-A web app that replaces the hand-made spreadsheet I use to plan time off. It shows the year as one continuous calendar with weekends, Romanian public holidays and employer bridge days marked. It suggests bridges that turn a few leave days into long breaks, and it tracks the leave I've planned and taken against my budget. It syncs between desktop and phone through Google sign-in and Google Drive.
+A web app that replaces the hand-made spreadsheet I use to plan time off. It shows the year as one continuous calendar with weekends, Romanian public holidays and the days the office is closed marked. It suggests bridges that turn a few leave days into long breaks, and it tracks the leave I've planned and taken against my budget. It syncs between desktop and phone through Google sign-in and Google Drive.
 
 ## 2. Scope and phases
 
@@ -19,14 +19,14 @@ The data model is per person from v1, so v2 adds features but needs no migration
 
 ## 3. Glossary
 
-- **Working day**: Mon–Fri that is not a public holiday and not covered by a free employer day.
-- **Day off (free)**: a weekend, a public holiday, or a day covered by a leave type that does not count against annual leave (employer bridge day, swap day, floating day…).
+- **Working day**: Mon–Fri that is not a public holiday and not covered by a free office-closed day.
+- **Day off (free)**: a weekend, a public holiday, or a day covered by a leave type that does not count against annual leave (office-closed day, swap day, floating day…).
 - **Swap day**: when a legal holiday falls on a Saturday or Sunday, the employer requires me to take either the Friday before or the Monday after as a day off. Which one is my choice.
 - **Floating day**: an employer bonus day that I place on any date I choose. HR sets the yearly number; it seems to depend on how many legal holidays fall on weekends, but that isn't predictable, so I enter it by hand.
-- **Employer bridge day**: other days the employer gives the whole company off, e.g. 27–31 Dec.
+- **Office-closed day**: a day the office is closed, e.g. between Christmas and New Year. Besides swap and floating days, it is the only extra day off the employer gives.
 - **Leave block**: a date range of one leave type with a status. Its **leave cost** is the number of working days inside it, charged to the type's budget.
 - **Days off gained**: the length of the whole run of consecutive non-working days that the block creates, including the free days around it.
-- **Bridge (punte) candidate**: a range `[a, b]` where day `a-1` and day `b+1` are working days, every day in the range is free or covered by leave, and the range contains at least one public holiday or employer day.
+- **Bridge (punte) candidate**: a range `[a, b]` where day `a-1` and day `b+1` are working days, every day in the range is free or covered by leave, and the range contains at least one public holiday or office-closed day.
 - **Ratio**: days off gained ÷ leave cost.
 - **Status**: `idea` → `planned` → `approved`. (§4.4)
 
@@ -41,7 +41,7 @@ Priority: **M** = must (v1), **S** = should (v1 if cheap), **v2** = phase 2.
 | CAL-1 | M | Show the calendar as one continuous list of weeks, Monday to Sunday, with no break between months, like the spreadsheet. |
 | CAL-2 | M | Default range: the selected year plus the weeks that overlap the previous December and the following January, so the Christmas–Epiphany break is visible in full. A year switcher moves between years. |
 | CAL-3 | M | Separate months with a stepped line that follows the real first day of each month. Show the month name beside the weeks it covers. |
-| CAL-4 | M | Colour each day by type: weekend, public holiday, employer day, and each leave type. Use the spreadsheet's pink palette as the default theme. |
+| CAL-4 | M | Colour each day by type: weekend, public holiday, office-closed day, and each leave type. Use the spreadsheet's pink palette as the default theme. |
 | CAL-5 | M | A notes column beside each week shows the holiday names in that week (e.g. "Paște", "Rusalii", "Sf. Maria"). |
 | CAL-6 | M | Draw leave blocks as one outline around the whole range, even when it crosses weeks. `idea` = outline only; `planned` = outline plus a light fill; `approved` = solid fill and a thicker outline. Colour must never be the only signal: also use line style or thickness. |
 | CAL-7 | M | Say in plain words what a block costs and what it gives, with full dates and no abbreviations, e.g. "Folosești 1 zi de concediu → ești liber 5 zile la rând: vineri 27 noiembrie – marți 1 decembrie". Shown in the editor and as the tooltip of the block's days; nothing is written on the calendar itself. |
@@ -58,16 +58,16 @@ Priority: **M** = must (v1), **S** = should (v1 if cheap), **v2** = phase 2.
 | DAY-3 | M | Per-year overrides: add, remove or rename a public holiday for a specific date, because the law changes (6–7 Jan were added recently). Overrides are stored in my file. |
 | DAY-4 | M | Legal holidays on a Saturday or Sunday, except Easter Sunday and Rusalii Sunday, which always fall on Sunday, are listed for the year as **swap reminders**: "Sun 24 Jan 2027: choose Fri 22 or Mon 25 Jan". The reminder stays open until a swap day is entered for it. I enter swap days by hand (one click on either suggested day). |
 | DAY-5 | S | Each swap reminder shows which of the two days makes the better bridge given the rest of the plan (e.g. "Friday gives 4 days off with 1 leave day before it"). |
-| DAY-6 | M | I enter employer bridge days by hand each year as blocks of the *employer bridge day* leave type (§4.3), status `approved`. |
+| DAY-6 | M | I enter the days the office is closed by hand each year, as blocks of the *office closed* leave type (§4.3), status `approved`. |
 
 ### 4.3 Leave types (LT)
 
 | ID | Pri | Requirement |
 |---|---|---|
-| LT-1 | M | Built-in types: **annual leave** (concediu de odihnă), **floating day**, **excused leave** (învoire), **swap day**, **employer bridge day**, **special event** (wedding, birth, death in the family…), **sick**, **comp / unpaid**. |
-| LT-2 | M | Each type has a name (RO and EN), a colour, a "counts against annual leave" setting, and a "needs approval" setting. Defaults: annual counts against annual leave and needs approval; floating days have their own quota (LT-6) and don't need approval; excused leave has its own quota (LT-6) and needs approval; swap and employer bridge days are entered already `approved`; the rest count against nothing. |
+| LT-1 | M | Built-in types: **annual leave** (concediu de odihnă), **floating day**, **excused leave** (învoire), **swap day**, **office closed** (birou închis), **special event** (wedding, birth, death in the family…), **sick**, **unpaid leave** (concediu fără plată). |
+| LT-2 | M | Each type has a name (RO and EN), a colour, a "counts against annual leave" setting, and a "needs approval" setting. Defaults: annual counts against annual leave and needs approval; floating days have their own quota (LT-6) and don't need approval; excused leave has its own quota (LT-6) and needs approval; swap and office-closed days are entered already `approved`; the rest count against nothing. |
 | LT-6 | M | Floating days and excused leave each have a per-year quota that I enter by hand (excused leave: at most 2 a year). Unused days of both expire on 31 Dec. Annual leave carries over to the next year as a BAL-2 adjustment. |
-| LT-3 | M | The "counts against annual leave" setting for employer bridge days can be changed per year, because some years the employer takes them out of annual leave. |
+| LT-3 | M | The "counts against annual leave" setting for office-closed days can be changed per year, because some years the employer takes them out of annual leave. |
 | LT-4 | S | I can add or rename types. Built-in types can be hidden but not deleted. |
 | LT-5 | M | The app keeps a separate per-year total of days used for each type. |
 
@@ -80,7 +80,7 @@ Priority: **M** = must (v1), **S** = should (v1 if cheap), **v2** = phase 2.
 | BLK-3 | M | Status `approved`: signed off by HR or my manager. Its cost is reserved; once its dates have passed, it counts as **used**. |
 | BLK-4 | M | Status moves forward or back in one step. Changing an `approved` block's dates asks me to confirm. For types that don't need approval (LT-2), `planned` is the final stage. |
 | BLK-5 | M | Blocks of the same person must not overlap, except `idea` blocks, which may overlap each other and other blocks. |
-| BLK-6 | M | Leave cost counts working days only. Weekends, public holidays and free employer days inside a block cost nothing. |
+| BLK-6 | M | Leave cost counts working days only. Weekends, public holidays and free office-closed day inside a block cost nothing. |
 
 ### 4.5 Balance (BAL)
 
@@ -97,7 +97,7 @@ Priority: **M** = must (v1), **S** = should (v1 if cheap), **v2** = phase 2.
 
 | ID | Pri | Requirement |
 |---|---|---|
-| SUG-1 | M | Generate every bridge candidate (§3) for the selected year, given the current holidays, employer days and existing planned or approved blocks. Configurable maximum leave cost per candidate (default 5). |
+| SUG-1 | M | Generate every bridge candidate (§3) for the selected year, given the current holidays, office-closed days and existing planned or approved blocks. Configurable maximum leave cost per candidate (default 5). |
 | SUG-2 | M | Ranked list: each entry shows the date range, "X leave → Y off" and the holiday or holidays it builds on. Rank by ratio (best first), break ties by longer gain. |
 | SUG-3 | M | Each entry can be previewed on the calendar, accepted (it becomes an `idea` block), or dismissed (it is hidden for that year and the dismissal is saved). |
 | SUG-4 | M | **Propose plan**: picks a set of non-overlapping candidates within the remaining available balance, balancing two goals: (a) a high total ratio, and (b) spreading breaks through the year, measured as the longest stretch with no break of ≥ 3 consecutive days off. Shorter is better. The weight between (a) and (b) is a slider. |
@@ -121,7 +121,7 @@ Priority: **M** = must (v1), **S** = should (v1 if cheap), **v2** = phase 2.
 
 | ID | Pri | Requirement |
 |---|---|---|
-| IO-1 | M | One-time import of my old spreadsheet format. The imported records go into my Drive file as history; nothing from the sheet ever goes into the repo (NF-7). Fill colours: light pink FFE5F0 = weekend; pink FFBDDA = holiday; dark pink FF96C4 = swap day if it is the Friday before or Monday after a weekend holiday, otherwise employer bridge day. A pink FFBDDA weekday that isn't a calculated holiday is either a floating day or an employer bridge day. The preview suggests floating day (status `planned`), and I can change it. Medium-border outlines map to `idea` blocks (they were "sugestie concediu"). White and no-fill cells mean the same thing. Show a preview and the list of every classification before saving. |
+| IO-1 | M | One-time import of my old spreadsheet format. The imported records go into my Drive file as history; nothing from the sheet ever goes into the repo (NF-7). Fill colours: light pink FFE5F0 = weekend; pink FFBDDA = holiday; dark pink FF96C4 = swap day if it is the Friday before or Monday after a weekend holiday, otherwise office-closed day. A pink FFBDDA weekday that isn't a calculated holiday is either a floating day or an office-closed day. The preview suggests floating day (status `planned`), and I can change it. Medium-border outlines map to `idea` blocks (they were "sugestie concediu"). White and no-fill cells mean the same thing. Show a preview and the list of every classification before saving. |
 | IO-2 | M | Export `.ics` for a chosen year, filtered by status (default: planned + approved). One all-day event per block, with a stable UID so re-importing updates events instead of duplicating them. |
 | IO-3 | M | Push to Google Calendar: create or update one event per approved (and, optionally, planned) block in a chosen calendar; deleting or changing the block updates the event. Ask for the Calendar permission only when I first use this (incremental consent). |
 
@@ -187,7 +187,7 @@ save(calendarId, doc, baseVersion) → {version} | Conflict
 The public cases use a fictional plan for 2027 (`tests/fixtures/demo2027.ts`); only its holidays are real (NF-7). The fictional person:
 - took swap days on Mon 4 Jan (for Sat 2 Jan; Fri 1 Jan is itself a holiday), Mon 16 Aug (for Sun 15 Aug) and Fri 24 Dec (for Sat 25 Dec);
 - dismissed the Sun 26 Dec reminder and left Sun 24 Jan open;
-- has employer bridge days 28–31 Dec, a floating quota of 2, and one floating day on Mon 31 May.
+- has the office closed 28–31 Dec, a floating quota of 2, and one floating day on Mon 31 May.
 
 Given that plan, the ranked list (SUG-2) must contain at least these, with exactly these leave days:
 
@@ -223,7 +223,7 @@ None.
 
 ### Resolved
 
-- Weekdays the old sheet marks as holidays that aren't legal holidays are floating days or employer bridge days; I classify them in the IO-1 preview.
+- Weekdays the old sheet marks as holidays that aren't legal holidays are floating days or office-closed days; I classify them in the IO-1 preview.
 - OAuth app: production mode, unverified (AUTH-4).
 - Repo: public, with no personal data (NF-7).
 - Tech stack: React + TypeScript + Vite, with Vitest and Playwright tests. See [DESIGN.md](DESIGN.md).

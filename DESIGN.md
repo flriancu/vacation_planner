@@ -88,7 +88,7 @@ interface PlanDoc {
 interface Person extends Meta { name: string; color: string; hasAccount: boolean }
 
 interface LeaveType extends Meta {
-  key?: 'annual' | 'floating' | 'excused' | 'swap' | 'employer' | 'special' | 'sick' | 'comp';  // built-ins
+  key?: 'annual' | 'floating' | 'excused' | 'swap' | 'closed' | 'special' | 'sick' | 'unpaid';  // built-ins
   name: { ro: string; en: string };
   color: string;
   budget: 'annual' | 'floating' | 'excused' | 'none';  // which balance it draws from (LT-2, LT-6)
@@ -116,7 +116,7 @@ interface YearSettings extends Meta {
   annualOpening: number;                      // BAL-1
   floatingQuota: number;                      // LT-6
   excusedQuota: number;                       // LT-6
-  employerCountsAgainstAnnual: boolean;       // LT-3
+  closedCountsAgainstAnnual: boolean;       // LT-3
 }
 
 interface Adjustment extends Meta { personId: string; year: number; date: ISODate; days: number; note: string }
@@ -127,7 +127,7 @@ interface Dismissal  extends Meta {                                     // SUG-3
 interface Follow     extends Meta { driveFileId: string; label: string }
 ```
 
-- The per-year "counts against annual leave" setting for employer days (LT-3) lives in `YearSettings` and takes precedence over the type's `budget` for that year.
+- The per-year "counts against annual leave" setting for office-closed days (LT-3) lives in `YearSettings` and takes precedence over the type's `budget` for that year.
 - Mapping to a future DynamoDB table: `PK = owner#person`, `SK = <collection>#<id>`, one item per record. `settings` becomes one item.
 
 ## 4. Storage
@@ -208,7 +208,7 @@ Same interface, kept in memory and optionally seeded from a JSON file. Used:
 - `base`: `holiday`, `weekend` or `work`, from the calendar alone;
 - `blocks`: that person's live blocks covering the date, highest status first;
 - `off`: `base ≠ work`, or covered by any `planned`/`approved` block (of any type);
-- `anchor`: a holiday, or a `planned`/`approved` floating, swap or employer day.
+- `anchor`: a holiday, or a `planned`/`approved` floating, swap or office-closed day.
 
 Cost is always counted on `base = work` days. Being `off` is what lets a bridge pass through a day without paying for it.
 

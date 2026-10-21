@@ -39,7 +39,7 @@ describe('yearBalance', () => {
     const b = demo2027();
     const bal = yearBalance(b.doc, b.personId, 2027, '2027-07-01');
     expect(bal.floating).toEqual({ quota: 2, total: 2, used: 0, reserved: 1, available: 1, ideas: 0, ifIdeas: 1 });
-    expect(bal.annual.reserved + bal.annual.used).toBe(0); // swap and employer days are free
+    expect(bal.annual.reserved + bal.annual.used).toBe(0); // swap and office-closed days are free
     expect(bal.expiring.floating).toBe(false);
   });
 
@@ -61,9 +61,9 @@ describe('yearBalance', () => {
     expect(bal.annual.used).toBe(0);
   });
 
-  it('charges employer days to annual leave in years set that way (LT-3)', () => {
+  it('charges office-closed days to annual leave in years set that way (LT-3)', () => {
     const b = demo2027();
-    b.update('yearSettings', { ...getYearSettings(b.doc, b.personId, 2027)!, employerCountsAgainstAnnual: true });
+    b.update('yearSettings', { ...getYearSettings(b.doc, b.personId, 2027)!, closedCountsAgainstAnnual: true });
     const bal = yearBalance(b.doc, b.personId, 2027, '2027-12-30');
     // 28–29 Dec are past (used); 30–31 Dec are still reserved.
     expect(bal.annual).toMatchObject({ used: 2, reserved: 2, available: 17 });

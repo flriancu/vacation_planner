@@ -16,7 +16,7 @@ describe('blockStats (CAL-7)', () => {
 
   it('costs an idea as if accepted, without charging days already covered', () => {
     const b = demo2027();
-    const idea = b.block('annual', '2027-12-24', '2027-12-31', 'idea'); // swap + employer days already cover all but 27 Dec
+    const idea = b.block('annual', '2027-12-24', '2027-12-31', 'idea'); // swap + office-closed days already cover all but 27 Dec
     expect(stats(b, idea.id)).toMatchObject({ cost: 1, gain: 10, breakEnd: '2028-01-02' });
   });
 

@@ -1,6 +1,6 @@
 # Vacation planner
 
-A small web app for planning time off in Romania. It shows the year as one continuous calendar of weeks, marks weekends, public holidays and employer days off, suggests bridges ("1 leave day → 5 days off"), and tracks leave against yearly budgets.
+A small web app for planning time off in Romania. It shows the year as one continuous calendar of weeks, marks weekends, public holidays and the days the office is closed, suggests bridges ("1 leave day → 5 days off"), and tracks leave against yearly budgets.
 
 - **Live demo:** https://flriancu.github.io/vacation_planner/ (in-memory: changes are not saved yet)
 - **What it should do:** [REQUIREMENTS.md](REQUIREMENTS.md)

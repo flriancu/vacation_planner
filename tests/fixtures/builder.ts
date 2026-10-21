@@ -56,7 +56,7 @@ export class DocBuilder {
 
   year(
     year: number,
-    settings: { annualOpening?: number; floatingQuota?: number; excusedQuota?: number; employerCountsAgainstAnnual?: boolean },
+    settings: { annualOpening?: number; floatingQuota?: number; excusedQuota?: number; closedCountsAgainstAnnual?: boolean },
   ) {
     return this.add('yearSettings', {
       personId: this.personId,
@@ -64,7 +64,7 @@ export class DocBuilder {
       annualOpening: settings.annualOpening ?? 0,
       floatingQuota: settings.floatingQuota ?? 0,
       excusedQuota: settings.excusedQuota ?? 0,
-      employerCountsAgainstAnnual: settings.employerCountsAgainstAnnual ?? false,
+      closedCountsAgainstAnnual: settings.closedCountsAgainstAnnual ?? false,
     });
   }
 
