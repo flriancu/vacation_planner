@@ -1,32 +1,44 @@
-import { useCallback, useEffect, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { nextStamp } from '../domain/clock';
 import { yearOf, type ISODate } from '../domain/dates';
 import { deleteRecord, restoreRecord, updateRecord } from '../domain/edit';
-import { addRecord, live, newPlanDoc, STATUS_RANK, type PlanDoc, type RecordContext } from '../domain/schema';
+import { FIRST_YEAR, LAST_YEAR } from '../domain/holidays';
+import { addRecord, live, newPlanDoc, STATUS_RANK, type Block, type PlanDoc, type RecordContext } from '../domain/schema';
+import { AuthExpiredError } from '../google/auth';
 import { I18nProvider, useI18n, type Lang } from '../i18n';
 import type { Storage } from '../storage/Storage';
+import { PlanRemovedError, type DocumentSync } from '../sync/DocumentSync';
+import type { ReplicaStore } from '../sync/Replica';
 import type { Account } from './account';
 import { BlockEditor, type Draft, type EditorTarget } from './BlockEditor';
 import { Calendar } from './Calendar';
 import { DemoStrip } from './DemoStrip';
+import { errorDetail, errorMessage } from './errors';
 import { Header } from './Header';
+import { Notice } from './Notice';
 import { SidePane } from './SidePane';
 import { useTheme } from './theme';
 import { Tooltips } from './Tooltips';
 import { UndoToast, type UndoOffer } from './UndoToast';
 import { useHideOnScroll, useWidthClass } from './useLayout';
-import { useDocument, type SaveState } from './useDocument';
+import { useDocument, type SaveState, type SyncNotice } from './useDocument';
+import { useToday } from './useToday';
 import './app.css';
 
 const LANG_KEY = 'vacation-planner.lang';
 
-function recordContext(): RecordContext {
-  return { now: new Date().toISOString(), newId: () => crypto.randomUUID() };
+/** Record ids: random UUIDs. `randomUUID` exists only on secure origins (https, localhost), so not on a LAN address. */
+function newId(): string {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6]! & 0x0f) | 0x40;
+  b[8] = (b[8]! & 0x3f) | 0x80;
+  const h = [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
 
-/** Today in the viewer's time zone, as a whole day. */
-export function localToday(): ISODate {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+function recordContext(doc: PlanDoc): RecordContext {
+  return { now: nextStamp(doc), newId };
 }
 
 function storedLang(): Lang | null {
@@ -38,40 +50,77 @@ function storedLang(): Lang | null {
   }
 }
 
-export function App({ storage, account }: { storage: Storage; account: Account }) {
+/** Remembered for the next first paint and for the privacy and terms pages (public/legal.js). */
+function rememberLang(lang: Lang) {
+  try {
+    localStorage.setItem(LANG_KEY, lang);
+  } catch {
+    // private mode: the choice still lives in the document
+  }
+}
+
+interface AppProps {
+  storage: Storage;
+  account: Account;
+  /** Signed in: this device's copy of the plan (sync/Replica.ts). */
+  replica?: ReplicaStore;
+  /** Signed in: the demo plan made just before, to add to mine once. */
+  carry?: () => PlanDoc | null;
+}
+
+export function App({ storage, account, replica, carry }: AppProps) {
   const [lang, setLangState] = useState<Lang>(() => storedLang() ?? 'ro');
-  const { doc, saveState, loadError, update, flush } = useDocument(storage, () => {
-    const owner =
-      account.kind === 'google' ? { googleSub: account.sub, personName: account.name } : { googleSub: 'demo', personName: 'Me' };
-    return newPlanDoc(owner, recordContext()).doc;
+  const { doc, saveState, saveError, loadError, notices, sync } = useDocument({
+    storage,
+    init: () => {
+      const owner =
+        account.kind === 'google' ? { googleSub: account.sub, personName: account.name } : { googleSub: 'demo', personName: 'Me' };
+      return newPlanDoc(owner, { now: new Date().toISOString(), newId }).doc;
+    },
+    ...(account.kind === 'google' && { owner: account.sub }),
+    ...(replica && { replica }),
+    ...(carry && { carry }),
+    newId,
   });
 
   // The document remembers the language too (I18N-1); local storage only makes the first paint right.
   useEffect(() => {
-    if (doc && !storedLang()) setLangState(doc.settings.lang);
+    if (doc && !storedLang()) {
+      setLangState(doc.settings.lang);
+      rememberLang(doc.settings.lang);
+    }
     // only when the document first arrives
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [doc === null]);
 
+  // Another tab changed the language: follow it (the choice is shared, I18N-1).
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === LANG_KEY && (e.newValue === 'ro' || e.newValue === 'en')) setLangState(e.newValue);
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
   const setLang = useCallback(
     (next: Lang) => {
       setLangState(next);
-      try {
-        localStorage.setItem(LANG_KEY, next);
-      } catch {
-        // private mode: the choice still lives in the document
-      }
-      update((d) => ({ ...d, settings: { ...d.settings, lang: next, updatedAt: new Date().toISOString() } }));
+      rememberLang(next);
+      sync.update((d) => ({ ...d, settings: { ...d.settings, lang: next, updatedAt: nextStamp(d) } }));
     },
-    [update],
+    [sync],
   );
+
+  // Signing out saves first; whatever didn't reach Drive stays on this device for the next sign-in.
+  const shown: Account =
+    account.kind === 'google' ? { ...account, signOut: () => void sync.close().then((clean) => account.signOut(!clean)) } : account;
 
   return (
     <I18nProvider lang={lang} setLang={setLang}>
       {loadError ? (
-        <LoadError error={loadError} account={account} />
+        <LoadError error={loadError} account={shown} sync={sync} />
       ) : doc ? (
-        <Planner doc={doc} update={update} saveState={saveState} flush={flush} account={account} />
+        <Planner doc={doc} sync={sync} saveState={saveState} saveError={saveError} notices={notices} account={shown} />
       ) : (
         <LoadingState />
       )}
@@ -84,53 +133,108 @@ function LoadingState() {
   return <p className="load-state">{t('save.loading')}</p>;
 }
 
-function LoadError({ error, account }: { error: unknown; account: Account }) {
+/** Why the plan couldn't be opened, in words, and what can be done about it: always a way on. */
+function LoadError({ error, account, sync }: { error: unknown; account: Account; sync: DocumentSync }) {
   const { t } = useI18n();
+  const [reason, setReason] = useState<string | null>(null);
+  const reconnect = async () => {
+    if (account.kind !== 'google') return;
+    const failed = await account.reconnect();
+    setReason(failed);
+    if (!failed) void sync.open();
+  };
   return (
     <div className="load-state" role="alert">
       <p>{t('save.loadError')}</p>
-      <p className="detail">{error instanceof Error ? error.message : String(error)}</p>
-      {account.kind === 'google' && (
-        <button type="button" onClick={account.signOut}>
-          {t('auth.signOut')}
-        </button>
+      <p>{t(errorMessage(error))}</p>
+      {reason && (
+        <p className="auth-error">
+          {t(reason === 'other_account' ? 'auth.errOtherAccount' : 'auth.reconnectFailed', {
+            email: account.kind === 'google' ? account.email : '',
+          })}
+        </p>
       )}
+      <div className="load-actions">
+        {error instanceof AuthExpiredError ? (
+          <button type="button" className="primary" onClick={() => void reconnect()}>
+            {t('auth.reconnectShort')}
+          </button>
+        ) : (
+          <button type="button" className="primary" onClick={() => void sync.open()}>
+            {t('load.retry')}
+          </button>
+        )}
+        {error instanceof PlanRemovedError && (
+          <button type="button" onClick={() => void sync.open(true)}>
+            {t('load.startNew')}
+          </button>
+        )}
+        {account.kind === 'google' && (
+          <button type="button" onClick={() => account.signOut()}>
+            {t('auth.signOut')}
+          </button>
+        )}
+      </div>
+      <details className="detail">
+        <summary>{t('load.details')}</summary>
+        {errorDetail(error)}
+      </details>
     </div>
   );
 }
 
 interface PlannerProps {
   doc: PlanDoc;
-  update: (change: (doc: PlanDoc) => PlanDoc) => void;
+  sync: DocumentSync;
   saveState: SaveState;
-  flush: () => Promise<void>;
+  saveError: unknown;
+  notices: readonly SyncNotice[];
   account: Account;
 }
 
-function Planner({ doc, update, saveState, flush, account }: PlannerProps) {
-  const { t, lang } = useI18n();
+const clampYear = (y: number) => Math.min(LAST_YEAR, Math.max(FIRST_YEAR, y));
+
+function Planner({ doc, sync, saveState, saveError, notices, account }: PlannerProps) {
+  const { t, lang, plural } = useI18n();
   const { scheme, setScheme, mode, setMode } = useTheme();
-  const [today] = useState(localToday);
-  const [year, setYear] = useState(() => yearOf(today));
+  const today = useToday();
+  const [year, setYearState] = useState(() => clampYear(yearOf(today)));
+  const setYear = useCallback((update: (y: number) => number) => setYearState((y) => clampYear(update(y))), []);
   const [editor, setEditor] = useState<EditorTarget | null>(null);
+  /** The day to give focus back to when the editor closes (WCAG 2.4.3). */
+  const returnTo = useRef<ISODate | null>(null);
   const personId = live(doc.people)[0]!.id;
+  const { update } = sync;
 
   useEffect(() => {
     document.documentElement.lang = lang;
     document.title = t('app.title');
   }, [lang, t]);
 
+  const openEditor = (target: EditorTarget, from: ISODate) => {
+    returnTo.current = from;
+    setEditor(target);
+  };
+
+  const closeEditor = () => {
+    setEditor(null);
+    const date = returnTo.current;
+    requestAnimationFrame(() => {
+      const cell = date ? document.querySelector<HTMLElement>(`[data-date="${date}"]`) : null;
+      (cell ?? document.querySelector<HTMLElement>('main'))?.focus({ preventScroll: true });
+    });
+  };
+
   const openDay = (date: ISODate) => {
     const top = live(doc.blocks)
       .filter((b) => b.personId === personId && b.start <= date && date <= b.end)
       .sort((a, b) => STATUS_RANK[b.status] - STATUS_RANK[a.status] || a.createdAt.localeCompare(b.createdAt))[0];
-    if (top) setEditor({ mode: 'edit', blockId: top.id });
+    if (top) openEditor({ mode: 'edit', blockId: top.id }, date);
   };
 
   const save = (draft: Draft) => {
     const target = editor;
-    setEditor(null);
-    if (!target) return;
+    if (!target) return closeEditor();
     const fields = { typeId: draft.typeId, status: draft.status, start: draft.start, end: draft.end };
     if (target.mode === 'new') {
       update(
@@ -139,45 +243,57 @@ function Planner({ doc, update, saveState, flush, account }: PlannerProps) {
             d,
             'blocks',
             { personId, ...fields, ...(draft.note && { note: draft.note }), ...(draft.swapFor && { swapFor: draft.swapFor }) },
-            recordContext(),
+            recordContext(d),
           ).doc,
       );
     } else {
       update((d) =>
-        updateRecord(
-          d,
-          'blocks',
-          target.blockId,
-          { ...fields, note: draft.note || undefined, swapFor: draft.swapFor },
-          new Date().toISOString(),
-        ),
+        updateRecord(d, 'blocks', target.blockId, { ...fields, note: draft.note || undefined, swapFor: draft.swapFor }, nextStamp(d)),
       );
     }
+    // Moved to another year: follow it there, so it doesn't seem to vanish.
+    if (yearOf(draft.start) !== year && yearOf(draft.end) !== year) {
+      setYear(() => yearOf(draft.start));
+      returnTo.current = draft.start;
+    }
+    closeEditor();
   };
 
+  // Deletes made while the message shows are undone together: a second delete doesn't lose the first one's undo.
   const [undo, setUndo] = useState<UndoOffer | null>(null);
-  const clearUndo = useCallback(() => setUndo(null), []);
+  const deleted = useRef<Block[]>([]);
+  const clearUndo = useCallback(() => {
+    deleted.current = [];
+    setUndo(null);
+  }, []);
   const remove = (blockId: string) => {
-    setEditor(null);
-    update((d) => deleteRecord(d, 'blocks', blockId, new Date().toISOString()));
+    const before = doc.blocks[blockId];
+    closeEditor();
+    if (!before) return;
+    update((d) => deleteRecord(d, 'blocks', blockId, nextStamp(d)));
+    deleted.current = [...deleted.current, before];
+    const batch = deleted.current;
     setUndo({
       id: Date.now(),
-      message: t('undo.deleted'),
-      undo: () => update((d) => restoreRecord(d, 'blocks', blockId, new Date().toISOString())),
+      message: batch.length === 1 ? { key: 'undo.deleted' } : { key: 'undo.deletedMany', count: batch.length },
+      undo: () => update((d) => batch.reduce((acc, b) => restoreRecord(acc, 'blocks', b.id, nextStamp(acc), b), d)),
     });
   };
 
   const { ref: headerRef, hidden, height, hold } = useHideOnScroll<HTMLElement>();
   const width = useWidthClass();
 
-  // "Today": jump to this year and scroll to today's week; also once on first load, like calendar apps do.
+  // The page opens on today's week, like calendar apps do, and "Today" goes back there; going
+  // back to this year by the arrows keeps the place instead.
   const [todayTick, setTodayTick] = useState(1);
+  const scrolledTick = useRef(0);
   const goToday = () => {
-    setYear(yearOf(today));
+    setYear(() => yearOf(today));
     setTodayTick((n) => n + 1);
   };
   useEffect(() => {
-    if (!todayTick || year !== yearOf(today)) return;
+    if (scrolledTick.current === todayTick || year !== yearOf(today)) return;
+    scrolledTick.current = todayTick;
     const smooth = todayTick > 1 && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     hold(1500); // our own scroll: keep the header shown
     const frame = requestAnimationFrame(() =>
@@ -186,23 +302,39 @@ function Planner({ doc, update, saveState, flush, account }: PlannerProps) {
     return () => cancelAnimationFrame(frame);
   }, [todayTick, year, today, hold]);
 
+  // The sticky header covers the top of the page: keyboard focus scrolled into view must land below it (WCAG 2.4.11).
+  useEffect(() => {
+    document.documentElement.style.scrollPaddingTop = `${(hidden ? 0 : height) + 40}px`;
+  }, [hidden, height]);
+
+  const noticeText = (n: SyncNotice) =>
+    n.kind === 'carried' ? t('notice.carried', { count: plural('leaves', n.count) }) : t('notice.skipped', { count: n.count });
+
   return (
     <div className="app" style={{ '--header-offset': `${hidden ? 0 : height}px` } as CSSProperties}>
       <Header
         ref={headerRef}
         year={year}
         setYear={setYear}
+        minYear={FIRST_YEAR}
+        maxYear={LAST_YEAR}
         onToday={goToday}
         account={account}
         saveState={saveState}
-        flush={flush}
+        saveError={saveError}
+        flush={sync.flush}
         theme={{ scheme, setScheme, mode, setMode }}
         width={width}
         hidden={hidden}
       />
       {account.kind === 'demo' && <DemoStrip account={account} />}
+      {notices.map((n) => (
+        <Notice key={n.kind} scope="page" onClose={() => sync.dismissNotice(n.kind)} closeLabel={t('strip.close')}>
+          <p>{noticeText(n)}</p>
+        </Notice>
+      ))}
 
-      <main className="layout">
+      <main className="layout" tabIndex={-1}>
         {width !== 'expanded' && <SidePane width={width} />}
         <Calendar
           key={year}
@@ -210,7 +342,7 @@ function Planner({ doc, update, saveState, flush, account }: PlannerProps) {
           doc={doc}
           personId={personId}
           today={today}
-          onCreate={(start, end) => setEditor({ mode: 'new', start, end })}
+          onCreate={(start, end) => openEditor({ mode: 'new', start, end }, start)}
           onOpen={openDay}
         />
         {width === 'expanded' && <SidePane width={width} />}
@@ -234,7 +366,7 @@ function Planner({ doc, update, saveState, flush, account }: PlannerProps) {
           onSave={save}
           onDelete={remove}
           onSwitch={(blockId) => setEditor({ mode: 'edit', blockId })}
-          onClose={() => setEditor(null)}
+          onClose={closeEditor}
         />
       )}
     </div>

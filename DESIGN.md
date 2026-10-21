@@ -40,14 +40,20 @@ src/
     schema.ts        document types (§3), schemaVersion
     migrate.ts       migrate(doc) → doc, one step per version
     merge.ts         record-by-record merge (§4.3)
-    edit.ts          updateRecord / deleteRecord (deleted markers)
+    edit.ts          updateRecord / deleteRecord / restoreRecord (deleted markers)
+    clock.ts         nextStamp: an edit's updatedAt, never below one already in the document (§4.3)
+    carry.ts         the demo's blocks into my plan, at sign-in (AUTH-3)
     blocks.ts        blockStats: a block's cost and the whole break it belongs to (CAL-7)
   storage/
-    Storage.ts       interface (§4.1)
+    Storage.ts       interface (§4.1), and what a storage error may say about itself (retryable, needs sign-in)
     DriveStorage.ts
-    MemoryStorage.ts end-to-end tests + signed-out demo
+    MemoryStorage.ts signed-out demo, sync unit tests
+  sync/              no React, no DOM (§4.5)
+    DocumentSync.ts  open, auto-save, merge on conflict, retry, refresh, close
+    Replica.ts       this device's copy of the plan (localStorage)
+    retry.ts         backoff delays
   google/
-    auth.ts          GIS token client, incremental scopes, token refresh
+    auth.ts          GIS token client, incremental scopes, reconnect
     drive.ts         find / create / read / write the plan file
     calendar.ts      event upsert / delete   (IO-3)
     picker.ts        v2
@@ -55,7 +61,8 @@ src/
     xlsxSheet.ts     old sheet → preview of classifications → records   (IO-1)
   i18n/              ro.ts, en.ts, index.ts (useT hook)
   ui/                App, Calendar (+ calendarModel.ts: pure layout helpers), BlockEditor,
-                     Legend, useDocument (open + auto-save); later: BalancePanel,
+                     Legend, useDocument (connects DocumentSync to React and page events),
+                     useToday, errors.ts (errors in words), ErrorBoundary; later: BalancePanel,
                      SuggestionsPanel, PlanDialog, SwapReminders, ImportDialog, SettingsDialog
 tests/
   unit/              Vitest, includes the §7 acceptance cases
@@ -136,17 +143,23 @@ interface Follow     extends Meta { driveFileId: string; label: string }
 
 ```ts
 interface Storage {
-  listCalendars(): Promise<{ calendarId: string; ownerName: string; writable: boolean }[]>;
+  listCalendars(): Promise<CalendarRef[]>;   // oldest first
+  listRemoved(): Promise<CalendarRef[]>;     // Drive: in the trash
   load(calendarId: string): Promise<{ doc: PlanDoc; version: string }>;
+  version(calendarId: string): Promise<string>;
   save(calendarId: string, doc: PlanDoc, baseVersion: string):
     Promise<{ ok: true; version: string } | { ok: false; conflict: true }>;
   create(initial: PlanDoc): Promise<{ calendarId: string; version: string }>;
+  remove(calendarId: string): Promise<void>;
 }
 ```
 
+Errors say what they mean through two optional properties, `retryable` and `needsSignIn` (`StorageFailure`), so the sync reacts to them without knowing Drive.
+
 ### 4.2 DriveStorage
 
-- **Finding the file:** `files.list` with `q = "appProperties has { key='app' and value='vacation_planner' } and 'me' in owners and trashed=false"`. With `drive.file` this only sees files the app created. If none is found → `create`.
+- **Finding the file:** `files.list` with `q = "appProperties has { key='app' and value='vacation_planner' } and 'me' in owners and trashed=false"`, ordered by `createdTime`, every page. With `drive.file` this only sees files the app created. An incomplete list is an error, never "no plan". If there is none, and none in the trash either, → `create`; a plan in the trash is reported instead (restore it, or start a new one on purpose).
+- **Every call:** a 30 s timeout (a call that hangs must not block every later save), `cache: 'no-store'` (a cached version would make a stale write look safe) and `redirect: 'error'`. Answers are checked: a version must be a number, a list must be a list.
 - **Creating it:** a multipart upload of `vacation-planner.json` into the Drive root, with `appProperties: { app: 'vacation_planner' }`.
 - **Version:** the Drive file's `version` field (a number that increases on every change).
 - **Saving:**
@@ -154,8 +167,7 @@ interface Storage {
   2. If it equals `baseVersion`, upload with `PATCH /upload/drive/v3/files/{id}?uploadType=media`.
   3. Otherwise return `conflict`, and the app reloads, merges (§4.3) and saves again.
 
-  Drive v3 has no compare-and-swap, so there's a short race window between steps 1 and 2. Only the owner writes the file (requirements §6.4), so the worst case is two of my own devices saving within the same second. The newer save still contains the other device's records the next time it merges.
-- **Saving cadence:** debounce 1.5 s after the last change; save on `visibilitychange` → hidden; status indicator shows saved / saving / error (NF-4).
+  Drive v3 has no compare-and-swap (no `If-Match`), so there's a short race window between steps 1 and 2: two of my devices saving within it can overwrite each other. The losing device still has its records, in memory and in its copy of the plan (§4.5), and merges them back on its next save, refresh or open. Step 1 also reads `trashed`: a plan in the bin is reported, not written to.
 
 ### 4.3 Merge
 
@@ -164,8 +176,19 @@ interface Storage {
 ### 4.4 MemoryStorage
 
 Same interface, kept in memory and optionally seeded from a JSON file. Used:
-- by Playwright (selected with build mode `VITE_STORAGE=memory`; that code path is removed from the production bundle);
-- for the signed-out demo (AUTH-3): holidays only, read-only, nothing saved.
+- for the signed-out demo (AUTH-3): editable, nothing outlives the page; at sign-in its blocks are added to my plan (`domain/carry.ts`);
+- by the unit tests of the sync. The end-to-end tests use the demo, and a fake Drive for the signed-in paths.
+
+### 4.5 Sync (`sync/DocumentSync.ts`)
+
+One class, no React: open, auto-save, merge, retry, refresh and close, with every storage call in one queue so they never overlap. `ui/useDocument.ts` only connects it to React and to the page's events.
+
+- **Open:** the oldest plan file; any others (two devices creating one at once) are merged into it and moved to the trash. A file of another account is refused. Then this device's copy (below) and, after a sign-in from the demo, the demo's blocks are merged in; if that adds anything, it is saved at once.
+- **Saving:** 1.5 s after the last change (NF-4); at once when the page is hidden or left (`visibilitychange`, `pagehide`); before signing out. A conflict reloads, merges (§4.3) and tries again, up to three rounds.
+- **This device's copy:** every change is also written, synchronously, to `localStorage` (`vacation-planner.replica.<sub>`), merged with what other tabs wrote there. A reload, a closed tab, a crash or an expired session can stop a save; the copy can't be lost that way, and the next open merges it back. Replaying it is always safe, because merging is by record and time. Signing out deletes it, unless something in it never reached Drive.
+- **Failures:** a retryable one (no answer, timeout, 429, 5xx, conflicts that kept coming) is retried after 2, 4, 8 … 60 s, and when the network comes back; the status then reads "Not saved · Try again", a button. An expired session shows "Reconnect". The browser asks before closing the tab while a change isn't saved.
+- **Other devices:** when the page comes back into view, the version is checked; if it changed, the plan is reloaded and merged.
+- **Files the app can't fully read** (`migrate.ts`): records that fail the schema's checks (an unknown status or leave type, an impossible date, a year outside 1900–2099) are set aside, kept out of the calendar, and written back unchanged; the page says how many. Timestamps that aren't timestamps become 1970, so they lose every merge.
 
 ## 5. Google integration
 
@@ -175,7 +198,8 @@ Same interface, kept in memory and optionally seeded from a JSON file. Used:
 - The Google account id (`sub`) and display name come from the `userinfo` endpoint.
 - `google/auth.ts` preloads the GIS script on page load, so the popup opens inside the click (browsers block popups that aren't). The session (token, expiry, user) is kept in `sessionStorage`: a reload in the same tab stays signed in until the token expires; a new tab or visit takes one click ("Continuă ca …", the last account is remembered in `localStorage` as a hint only). Never stored in `localStorage`.
 - `ui/Root.tsx` owns sign-in: signed out → `MemoryStorage` demo; signed in → `DriveStorage(() => auth.accessToken())`, remounting `App` per account. `accessToken()` throws `AuthExpiredError` near expiry; `useDocument` then shows "reconnect", keeps the unsaved document in memory and saves after the click.
-- Access tokens last about 1 h. Before one expires, the app asks again with `prompt: ''`, which normally happens without showing anything. If it fails, a "Sign in again" banner appears; unsaved changes stay in memory and are saved after signing in again.
+- Access tokens last about 1 h, and the browser-only token model has no refresh token. Google only grants a new token from a click, so the app doesn't renew it in the background: after expiry the save status becomes "Reconnect" (one click, same account; a different account is refused). Unsaved changes stay in memory and in this device's copy (§4.5), so even a reload in between loses nothing: the next sign-in saves them, and the demo strip says they're waiting.
+- If Google's script can't load (an extension or network blocks `accounts.google.com`), the click says so instead of "still loading".
 - Calendar push (IO-3) calls `requestAccessToken` again with `include_granted_scopes: true` and adds `https://www.googleapis.com/auth/calendar.events`. This only happens the first time I click "push".
 
 ### 5.2 Calendar push (IO-3)
@@ -295,7 +319,9 @@ The floating and excused balances use the same formulas with their quotas and no
   - .ics output;
   - IO-1 classification (milestone 5) against a small made-up xlsx in the same format.
 - **Private tests (`private/`, git-ignored, NF-7):** the same checks on my real data: the old sheet reproduced day for day, its breaks found by `suggest()`, the import of the real xlsx. `npm test` picks them up when the folder exists; CI never sees them.
-- **End-to-end (Playwright, Chromium + mobile viewport):**
+- **End-to-end (Playwright, Chromium + mobile viewport; also run on Firefox and WebKit before releases):** the browser's only way out is a proxy that isn't there, so a request a fake misses (a CORS preflight, one sent while a page unloads) fails instead of reaching Google.
+  - `drive.spec.ts`, against a fake Drive (`fakeDrive.ts`): an edit survives an immediate reload, a failed save offers "try again", a file with unreadable entries opens and keeps them;
+  - `fixes.spec.ts`: regressions from adversarial testing (picker, year limits, unsaved changes, focus, a trembling click, undo, BLK-5);
   - create, edit and delete a block;
   - move a block through the stages;
   - accept a suggestion;
@@ -309,7 +335,7 @@ The floating and excused balances use the same formulas with their quotas and no
 
 1. **Domain:** dates, holidays, day kinds, swaps, suggestions, balances + unit tests, including §7. No UI. *Done 2026-10-21.*
 2. **Calendar UI** on MemoryStorage: view, blocks, editor, i18n, first end-to-end tests, CI + Pages deploy (demo mode). *Done 2026-10-21; the demo is editable in memory until sign-in exists.*
-3. **Google:** sign-in, DriveStorage, merge on conflict, save status.
+3. **Google:** sign-in, DriveStorage, merge on conflict, save status. *Done 2026-10-21; hardened 2026-10-22 after adversarial testing (§4.5).*
 4. **Planning:** balance panel, swap reminders, suggestions panel, plan proposal.
 5. **Import and export:** xlsx import, .ics, Calendar push.
 6. **v2:** people, following others' files with the Picker, overlay, overlap finder, school holidays.
@@ -318,7 +344,9 @@ The floating and excused balances use the same formulas with their quotas and no
 
 | Risk | Mitigation |
 |---|---|
-| The GIS token refresh can be blocked by Safari's tracking protection or by pop-up blockers on phones | The "Sign in again" banner keeps unsaved changes in memory; test on iOS Safari in milestone 3. |
-| Two of my devices save within the same second (§4.2) | Record-level merge on the next save; nothing is lost permanently. |
+| Reconnecting can be blocked by Safari's tracking protection or by pop-up blockers on phones | Unsaved changes stay in this device's copy (§4.5) until a sign-in works; test on iOS Safari. |
+| Two of my devices save within the same second (§4.2) | The losing device merges its records back on its next save, refresh or open (§4.5). |
+| A device's clock is wrong | `nextStamp` (`domain/clock.ts`): an edit is always stamped later than what it saw, so a fast clock can't undo later edits; truly simultaneous edits still go to the later clock. |
+| Every GitHub Pages site of an account shares one origin (`flriancu.github.io`), so they can read each other's storage | The app has its own subdomain (`concediu.floriniancu.ro`, NF-1). |
 | A Romanian holiday law change | Per-year overrides (DAY-3); the fixed list lives in one file. |
 | The plan proposal's weight `k` feels wrong | It's a single number, tuned locally against my past plans; the slider covers personal preference. |

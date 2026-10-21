@@ -31,6 +31,6 @@
   try {
     stored = localStorage.getItem(KEY);
   } catch (e) {}
-  var browserRo = (navigator.language || '').toLowerCase().indexOf('ro') === 0;
-  show(stored === 'en' || stored === 'ro' ? stored : browserRo ? 'ro' : 'en', false);
+  // No choice yet: Romanian, the app's own default (src/ui/App.tsx).
+  show(stored === 'en' ? 'en' : 'ro', false);
 })();

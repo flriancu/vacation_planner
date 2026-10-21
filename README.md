@@ -1,6 +1,6 @@
 # Vacation planner
 
-A small web app for planning time off in Romania. It shows the year as one continuous calendar of weeks, marks weekends, public holidays and the days the office is closed, suggests bridges ("1 leave day → 5 days off"), and tracks leave against yearly budgets.
+A small web app for planning time off in Romania. It shows the year as one continuous calendar of weeks, marks weekends, public holidays and the days the office is closed, and lets you plan leave from idea to approved, each block saying what it costs and how long a break it gives ("you use 1 leave day → you're off 5 days in a row"). Bridge suggestions and yearly budgets are already worked out underneath; their screens come next (milestone 4).
 
 - **Live:** https://concediu.floriniancu.ro/ (signed out it is a demo kept in memory; signed in with Google, the plan is saved to your own Drive)
 - **What it should do:** [REQUIREMENTS.md](REQUIREMENTS.md)

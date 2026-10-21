@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type SyntheticEvent } from 'react';
 import { blockStats } from '../domain/blocks';
 import { blockBudget, buildDays, findOverlaps } from '../domain/calendar';
 import { addDays, overlaps, yearOf, type ISODate } from '../domain/dates';
 import { updateRecord } from '../domain/edit';
 import { addRecord, live, STATUS_RANK, typeByKey, type Block, type BlockStatus, type PlanDoc } from '../domain/schema';
-import { swapReminders } from '../domain/swaps';
+import { swapReminders, type SwapReminder } from '../domain/swaps';
 import { useI18n } from '../i18n';
 import { describeBlock } from './describe';
 import { DateRangeFields } from './DateRangeFields';
@@ -39,7 +39,20 @@ function initialDraft(target: EditorTarget, doc: PlanDoc): Draft {
     const b = doc.blocks[target.blockId]!;
     return { typeId: b.typeId, status: b.status, start: b.start, end: b.end, note: b.note ?? '', ...(b.swapFor && { swapFor: b.swapFor }) };
   }
-  return { typeId: typeByKey(doc, 'annual')!.id, status: 'idea', start: target.start, end: target.end, note: '' };
+  const annual = typeByKey(doc, 'annual') ?? live(doc.leaveTypes)[0]!;
+  return { typeId: annual.id, status: 'idea', start: target.start, end: target.end, note: '' };
+}
+
+const sameDraft = (a: Draft, b: Draft) =>
+  a.typeId === b.typeId && a.status === b.status && a.start === b.start && a.end === b.end && a.note === b.note && a.swapFor === b.swapFor;
+
+/**
+ * Weekend holidays a swap day around `date` can stand for (DAY-4). A holiday on 1 January
+ * can be made up on 31 December of the year before, so the neighbouring years count too.
+ */
+function nearbyReminders(doc: PlanDoc, personId: string, date: ISODate): SwapReminder[] {
+  const y = yearOf(date);
+  return [y - 1, y, y + 1].flatMap((year) => swapReminders(doc, personId, year));
 }
 
 /** Create or edit one block: type, status, dates, note (CAL-8, CAL-9, BLK-*). */
@@ -47,8 +60,15 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
   const i18n = useI18n();
   const { t, name, date: fmt } = i18n;
   const dialog = useRef<HTMLDialogElement>(null);
-  const [draft, setDraft] = useState(() => initialDraft(target, doc));
+  const [initial] = useState(() => initialDraft(target, doc));
+  const [draft, setDraft] = useState(initial);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  /** Set while asking whether to drop unsaved changes: what to do if the answer is yes. */
+  const [leaving, setLeaving] = useState<(() => void) | null>(null);
+  /** Approval dropped only because the type moved to one without approval; given back if it moves back. */
+  const [demoted, setDemoted] = useState(false);
   const original: Block | undefined = target.mode === 'edit' ? doc.blocks[target.blockId] : undefined;
+  const dirty = !sameDraft(draft, initial);
 
   useEffect(() => {
     const d = dialog.current;
@@ -81,7 +101,15 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
     };
   }, [doc, personId, target, draft, type.key, valid, i18n]);
 
-  const reminders = type.key === 'swap' && valid ? swapReminders(doc, personId, yearOf(draft.start)) : [];
+  // BLK-5: planned and approved leave can't overlap other planned or approved leave; ideas can.
+  const blocked = !!preview?.overlap && draft.status !== 'idea';
+
+  // The holidays this swap day can stand for: still open, or already the one this block stands for.
+  const ownId = original?.id;
+  const reminders =
+    type.key === 'swap' && valid
+      ? nearbyReminders(doc, personId, draft.start).filter((r) => r.open || (r.resolvedBy && r.resolvedBy.id === ownId))
+      : [];
   const alsoHere =
     original && valid
       ? live(doc.blocks).filter((b) => b.personId === personId && b.id !== original.id && overlaps(b.start, b.end, draft.start, draft.end))
@@ -91,27 +119,56 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
 
   const changeType = (typeId: string) => {
     const next = doc.leaveTypes[typeId]!;
-    const status = !next.needsApproval && draft.status === 'approved' ? 'planned' : draft.status;
+    let status = draft.status;
+    if (!next.needsApproval && status === 'approved') {
+      status = 'planned';
+      setDemoted(true);
+    } else if (next.needsApproval && demoted && status === 'planned') {
+      status = 'approved';
+      setDemoted(false);
+    }
     const swapFor =
       next.key === 'swap'
-        ? (draft.swapFor ?? swapReminders(doc, personId, yearOf(draft.start)).find((r) => r.options.includes(draft.start))?.holiday.date)
+        ? (draft.swapFor ??
+          nearbyReminders(doc, personId, draft.start).find((r) => r.open && r.options.includes(draft.start))?.holiday.date)
         : undefined;
     setDraft((d) => ({ ...d, typeId, status, ...(swapFor ? { swapFor } : { swapFor: undefined }) }));
   };
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (!valid) return;
-    onSave({ ...draft, ...(type.key !== 'swap' && { swapFor: undefined }) });
+    if (!valid || blocked) return;
+    // A holiday no longer on offer (the dates moved away from it) is not kept out of sight.
+    const swapFor = type.key === 'swap' && reminders.some((r) => r.holiday.date === draft.swapFor) ? draft.swapFor : undefined;
+    onSave({ ...draft, swapFor });
+  };
+
+  /** Leaves the editor through `then`, asking first if there are unsaved changes. */
+  const leave = (then: () => void) => (dirty ? setLeaving(() => then) : then());
+  const close = () => dialog.current?.close();
+
+  // Escape (the dialog's "cancel"): close the month calendar first, then ask about unsaved changes.
+  // Handled here rather than on the calendar's keydown, because Safari closes the dialog regardless.
+  const onCancel = (e: SyntheticEvent) => {
+    e.preventDefault();
+    if (pickerOpen) setPickerOpen(false);
+    else if (leaving) setLeaving(null);
+    else leave(close);
   };
 
   // No "are you sure?": the delete can be undone from the message that follows (App).
   const remove = () => original && onDelete(original.id);
 
   return (
-    <dialog ref={dialog} className="editor" aria-labelledby="editor-title" onClose={onClose}>
+    <dialog ref={dialog} className="editor" aria-labelledby="editor-title" onClose={onClose} onCancel={onCancel}>
       <form onSubmit={submit}>
         <h2 id="editor-title">{t(target.mode === 'new' ? 'editor.new' : 'editor.edit')}</h2>
+
+        {original?.deleted && (
+          <p className="warning" role="alert">
+            {t('editor.deletedElsewhere')}
+          </p>
+        )}
 
         <label>
           {t('editor.type')}
@@ -134,7 +191,10 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
                 value={s}
                 checked={draft.status === s}
                 disabled={!reachable(s)}
-                onChange={() => set({ status: s })}
+                onChange={() => {
+                  setDemoted(false);
+                  set({ status: s });
+                }}
               />
               {t(`status.${s}`)}
             </label>
@@ -146,6 +206,8 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
           end={draft.end}
           onChange={(start, end) => set({ start, end })}
           overrides={live(doc.holidayOverrides)}
+          open={pickerOpen}
+          onOpenChange={setPickerOpen}
         />
 
         {type.key === 'swap' && (
@@ -155,7 +217,8 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
               <option value="">{t('editor.swapNone')}</option>
               {reminders.map((r) => (
                 <option key={r.holiday.date} value={r.holiday.date}>
-                  {fmt(r.holiday.date, { weekday: 'short', day: 'numeric', month: 'long' })} — {r.holiday.names.map(name).join(' · ')}
+                  {fmt(r.holiday.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} —{' '}
+                  {r.holiday.names.map(name).join(' · ')}
                 </option>
               ))}
             </select>
@@ -168,14 +231,13 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
         </label>
 
         <p className="summary" aria-live="polite">
-          {!valid && <span className="error">{t('editor.errEnd')}</span>}
           {preview && (
             <span data-testid="editor-cost" className="describe">
               {preview.description.spend && <span className="spend">{preview.description.spend}</span>}
               <span>{preview.description.get}</span>
             </span>
           )}
-          {preview?.overlap && draft.status !== 'idea' && <span className="warning">{t('editor.warnOverlap')}</span>}
+          {blocked && <span className="warning">{t('editor.overlap')}</span>}
           {original?.status === 'approved' && datesChanged && <span className="warning">{t('editor.warnApprovedDates')}</span>}
         </p>
 
@@ -185,9 +247,9 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
             <ul>
               {alsoHere.map((b) => (
                 <li key={b.id}>
-                  <button type="button" className="link" onClick={() => onSwitch(b.id)}>
-                    {name(doc.leaveTypes[b.typeId]!.name)} ({t(`status.${b.status}`)}), {fmt(b.start, { day: 'numeric', month: 'short' })} –{' '}
-                    {fmt(b.end, { day: 'numeric', month: 'short' })}
+                  <button type="button" className="link" onClick={() => leave(() => onSwitch(b.id))}>
+                    {name(doc.leaveTypes[b.typeId]!.name)} ({t(`status.${b.status}`)}), {fmt(b.start, { day: 'numeric', month: 'long' })} –{' '}
+                    {fmt(b.end, { day: 'numeric', month: 'long' })}
                   </button>
                 </li>
               ))}
@@ -195,20 +257,33 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
           </div>
         )}
 
-        <div className="actions">
-          {original && (
-            <button type="button" className="danger" onClick={remove}>
-              {t('editor.delete')}
+        {leaving ? (
+          <div className="actions confirm" role="alert">
+            <span>{t('editor.unsaved')}</span>
+            <span className="spacer" />
+            <button type="button" onClick={() => setLeaving(null)}>
+              {t('editor.keepEditing')}
             </button>
-          )}
-          <span className="spacer" />
-          <button type="button" onClick={() => dialog.current?.close()}>
-            {t('editor.cancel')}
-          </button>
-          <button type="submit" className="primary" disabled={!valid}>
-            {t('editor.save')}
-          </button>
-        </div>
+            <button type="button" className="danger" onClick={leaving}>
+              {t('editor.discard')}
+            </button>
+          </div>
+        ) : (
+          <div className="actions">
+            {original && !original.deleted && (
+              <button type="button" className="danger" onClick={remove}>
+                {t('editor.delete')}
+              </button>
+            )}
+            <span className="spacer" />
+            <button type="button" onClick={() => leave(close)}>
+              {t('editor.cancel')}
+            </button>
+            <button type="submit" className="primary" disabled={!valid || blocked}>
+              {t('editor.save')}
+            </button>
+          </div>
+        )}
       </form>
     </dialog>
   );

@@ -10,11 +10,20 @@
     />
     <title>Planificator de concediu</title>
     <script>
+      // Never inside another site's frame (clickjacking): GitHub Pages can't send X-Frame-Options,
+      // so the page leaves the frame, or stays blank if the frame forbids that.
+      if (window.top !== window.self) {
+        document.documentElement.style.display = 'none';
+        try {
+          window.top.location = window.location.href;
+        } catch {}
+      }
       // Colour scheme and mode before first paint, so there is no flash (ui/theme.ts keeps them in sync).
       try {
-        const s = localStorage.getItem('vacation-planner.scheme') || 'roz';
-        let m = localStorage.getItem('vacation-planner.mode') || 'auto';
-        if (m === 'auto') m = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        let s = localStorage.getItem('vacation-planner.scheme');
+        if (!['roz', 'neutru', 'contrast'].includes(s)) s = 'roz';
+        let m = localStorage.getItem('vacation-planner.mode');
+        if (m !== 'light' && m !== 'dark') m = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
         document.documentElement.dataset.scheme = s;
         document.documentElement.dataset.mode = m;
       } catch {}

@@ -1,6 +1,7 @@
-import { forwardRef } from 'react';
+import { forwardRef, useState } from 'react';
 import { useI18n } from '../i18n';
 import type { Account } from './account';
+import { errorMessage } from './errors';
 import { LangSwitch } from './LangSwitch';
 import { Menu } from './Menu';
 import { SCHEMES, type Mode, type SchemeId } from './theme';
@@ -17,9 +18,13 @@ export interface ThemeControls {
 interface Props {
   year: number;
   setYear: (update: (y: number) => number) => void;
+  /** The years the app can show (the holiday rules' range). */
+  minYear: number;
+  maxYear: number;
   onToday: () => void;
   account: Account;
   saveState: SaveState;
+  saveError: unknown;
   flush: () => Promise<void>;
   theme: ThemeControls;
   width: WidthClass;
@@ -33,7 +38,7 @@ interface Props {
  * the account menu, or a ⋯ menu when signed out.
  */
 export const Header = forwardRef<HTMLElement, Props>(function Header(
-  { year, setYear, onToday, account, saveState, flush, theme, width, hidden },
+  { year, setYear, minYear, maxYear, onToday, account, saveState, saveError, flush, theme, width, hidden },
   ref,
 ) {
   const { t } = useI18n();
@@ -42,15 +47,28 @@ export const Header = forwardRef<HTMLElement, Props>(function Header(
 
   return (
     <header ref={ref} className={`app-header${hidden ? ' is-hidden' : ''}`}>
-      {!compact && <h1>{t('app.title')}</h1>}
+      {/* Phones show no title, but the page still has its heading for screen readers. */}
+      <h1 className={compact ? 'sr-only' : undefined}>{t('app.title')}</h1>
       <nav className="year-nav" aria-label={t('year.label')}>
-        <button type="button" className="square" onClick={() => setYear((y) => y - 1)} aria-label={t('year.prev')}>
+        <button
+          type="button"
+          className="square"
+          onClick={() => setYear((y) => y - 1)}
+          disabled={year <= minYear}
+          aria-label={t('year.prev')}
+        >
           ‹
         </button>
         <span className="year" aria-live="polite">
           {year}
         </span>
-        <button type="button" className="square" onClick={() => setYear((y) => y + 1)} aria-label={t('year.next')}>
+        <button
+          type="button"
+          className="square"
+          onClick={() => setYear((y) => y + 1)}
+          disabled={year >= maxYear}
+          aria-label={t('year.next')}
+        >
           ›
         </button>
         <button type="button" onClick={onToday} data-tip={t('header.todayLabel')}>
@@ -58,7 +76,7 @@ export const Header = forwardRef<HTMLElement, Props>(function Header(
         </button>
       </nav>
       <div className="header-end">
-        <SaveStatus account={account} saveState={saveState} flush={flush} compact={compact} />
+        <SaveStatus account={account} saveState={saveState} saveError={saveError} flush={flush} compact={compact} />
         {!compact && (
           <Menu label={t('settings.menu')} button={<>{t('settings.menu')} ▾</>}>
             {settings}
@@ -102,19 +120,26 @@ function SettingsControls({ theme }: { theme: ThemeControls }) {
   );
 }
 
-/** A lasting state, so an indicator in one place (NN/g): demo, saving, saved, error, or "reconnect". */
+/**
+ * A lasting state, so an indicator in one place (NN/g): demo, saving, saved, or one action when
+ * something needs the user: "try again" after a failed save (it also retries by itself), or
+ * "reconnect" when the Google session expired.
+ */
 function SaveStatus({
   account,
   saveState,
+  saveError,
   flush,
   compact,
 }: {
   account: Account;
   saveState: SaveState;
+  saveError: unknown;
   flush: () => Promise<void>;
   compact: boolean;
 }) {
   const { t } = useI18n();
+  const [reconnectFailed, setReconnectFailed] = useState<string | null>(null);
   if (account.kind === 'demo') {
     return (
       <output className="status status-demo" data-tip={t('status.demo')} aria-label={t('status.demo')}>
@@ -126,12 +151,34 @@ function SaveStatus({
   }
   if (saveState === 'signin') {
     const reconnect = () =>
-      void account.reconnect().then(async (ok) => {
-        if (ok) await flush();
+      void account.reconnect().then(async (failed) => {
+        setReconnectFailed(failed);
+        if (!failed) await flush();
       });
+    const why =
+      reconnectFailed && t(reconnectFailed === 'other_account' ? 'auth.errOtherAccount' : 'auth.reconnectFailed', { email: account.email });
     return (
-      <button type="button" className="primary" onClick={reconnect} data-tip={t('auth.reconnect')}>
-        {t('auth.reconnectShort')}
+      <>
+        <button type="button" className="primary" onClick={reconnect} data-tip={why || t('auth.reconnect')}>
+          {t('auth.reconnectShort')}
+        </button>
+        {why && (
+          <span className="sr-only" role="alert">
+            {why}
+          </span>
+        )}
+      </>
+    );
+  }
+  if (saveState === 'error') {
+    const why = t(errorMessage(saveError));
+    return (
+      <button type="button" className="status status-error" onClick={() => void flush()} data-tip={why} aria-describedby="save-why">
+        <span className="dot" aria-hidden="true" />
+        <span>{t(compact ? 'save.retryShort' : 'save.retry')}</span>
+        <span id="save-why" className="sr-only">
+          {why}
+        </span>
       </button>
     );
   }
@@ -178,7 +225,7 @@ function AccountSlot({ account, settings, compact }: { account: Account; setting
         <span className="who">{account.email}</span>
       </div>
       {settings}
-      <button type="button" onClick={account.signOut}>
+      <button type="button" onClick={() => account.signOut()}>
         {t('auth.signOut')}
       </button>
     </Menu>

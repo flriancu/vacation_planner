@@ -5,7 +5,7 @@ import { enUS, ro } from '@daypicker/react/locale';
 import '@daypicker/react/style.css';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { isWeekend, makeDate, type ISODate } from '../domain/dates';
-import { holidaysBetween } from '../domain/holidays';
+import { FIRST_YEAR, holidaysBetween, LAST_YEAR } from '../domain/holidays';
 import type { HolidayOverride } from '../domain/schema';
 import { useI18n } from '../i18n';
 import { orderRange } from './calendarModel';
@@ -15,7 +15,14 @@ interface Props {
   end: ISODate;
   onChange: (start: ISODate, end: ISODate) => void;
   overrides: readonly HolidayOverride[];
+  /** Whether the month calendar is showing. The editor owns it, so its Escape can close the calendar first. */
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }
+
+/** The months the holiday rules cover (domain/holidays.ts). */
+const FIRST_MONTH = new Date(FIRST_YEAR, 0, 1);
+const LAST_MONTH = new Date(LAST_YEAR, 11, 1);
 
 /** DayPicker works with local Date objects; the app with whole-day ISO strings. */
 function toDate(iso: ISODate): Date {
@@ -50,9 +57,8 @@ function HolidayDayButton({ day, modifiers, ...button }: DayButtonProps) {
  * either order), with the range previewed in between. Inline, so the editor dialog never clips it.
  * Marked like the main calendar: off-anyway tint, holiday dots (name in the tooltip), today.
  */
-export function DateRangeFields({ start, end, onChange, overrides }: Props) {
+export function DateRangeFields({ start, end, onChange, overrides, open, onOpenChange: setOpen }: Props) {
   const { t, lang, date: fmt, name } = useI18n();
-  const [open, setOpen] = useState(false);
   /** Set after the first click: the day the new range starts from. */
   const [anchor, setAnchor] = useState<ISODate | null>(null);
   const [hover, setHover] = useState<ISODate | null>(null);
@@ -60,7 +66,8 @@ export function DateRangeFields({ start, end, onChange, overrides }: Props) {
   const trigger = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
 
-  const year = Number(start.slice(0, 4));
+  // Holidays around the month on show (not the block's year): browsing years ahead stays right.
+  const year = month.getFullYear();
   const holidays = useMemo(() => holidaysBetween(`${year - 1}-01-01`, `${year + 1}-12-31`, overrides), [year, overrides]);
 
   // Keyboard users land on the range's first day when the calendar opens (APG date picker).
@@ -151,6 +158,8 @@ export function DateRangeFields({ start, end, onChange, overrides }: Props) {
               weekStartsOn={1}
               month={month}
               onMonthChange={setMonth}
+              startMonth={FIRST_MONTH}
+              endMonth={LAST_MONTH}
               selected={{ from: toDate(lo), to: toDate(hi) }}
               onSelect={() => {}}
               onDayClick={pick}

@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DRIVE_FILE_SCOPE, GOOGLE_CLIENT_ID, GOOGLE_SCOPES } from '../config';
 import { GoogleAuth, SignInError, type Session } from '../google/auth';
 import { DriveStorage } from '../storage/DriveStorage';
 import { MemoryStorage } from '../storage/MemoryStorage';
+import { LocalReplica, replicaKey } from '../sync/Replica';
 import type { Account, AccountHint } from './account';
 import { App } from './App';
 
@@ -14,8 +15,10 @@ function readHint(): AccountHint | null {
     const raw = localStorage.getItem(HINT_KEY);
     if (!raw) return null;
     if (!raw.startsWith('{')) return { email: raw, name: raw.split('@')[0]! }; // stored by an earlier build
-    const v = JSON.parse(raw) as Partial<AccountHint>;
-    return typeof v.email === 'string' ? { email: v.email, name: v.name || v.email.split('@')[0]! } : null;
+    const v = JSON.parse(raw) as Record<string, unknown>;
+    if (typeof v.email !== 'string' || !v.email) return null;
+    const name = typeof v.name === 'string' && v.name.trim() ? v.name : v.email.split('@')[0]!;
+    return { email: v.email, name, ...(typeof v.sub === 'string' && v.sub && { sub: v.sub }) };
   } catch {
     return null;
   }
@@ -45,13 +48,16 @@ export function Root() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hint, setHint] = useState(readHint);
-  const demo = useMemo(() => new MemoryStorage(), []);
+  const [demo, setDemo] = useState(() => new MemoryStorage());
+  const demoRef = useRef(demo);
+  /** Set at sign-in: the demo plan made before it, carried into the Drive plan once (AUTH-3). */
+  const carryDemo = useRef(false);
   const sub = session?.user.sub;
   const drive = useMemo(() => (sub ? new DriveStorage(() => auth.accessToken()) : null), [sub]);
+  const replica = useMemo(() => (sub ? new LocalReplica(replicaKey(sub)) : null), [sub]);
+  const unsavedOnDevice = useMemo(() => !sub && !!hint?.sub && new LocalReplica(replicaKey(hint.sub)).hasUnsaved(), [sub, hint]);
 
-  useEffect(() => {
-    auth.preload().catch(() => setError('google'));
-  }, []);
+  useEffect(() => void auth.preload(), []);
 
   const signIn = useCallback(
     (otherAccount = false) => {
@@ -60,9 +66,10 @@ export function Root() {
       auth
         .signIn(otherAccount ? undefined : hint?.email)
         .then((s) => {
-          const next = { email: s.user.email, name: s.user.name.split(' ')[0] || s.user.email };
+          const next = { email: s.user.email, name: s.user.name.split(' ')[0] || s.user.email, sub: s.user.sub };
           writeHint(next);
           setHint(next);
+          carryDemo.current = true;
           setSession(s);
         })
         .catch((e: unknown) => setError(describe(e)))
@@ -73,26 +80,47 @@ export function Root() {
 
   const reconnect = useCallback(
     () =>
-      auth.signIn(session?.user.email).then(
+      auth.signIn(session?.user.email, session?.user.sub).then(
         (s) => {
           setSession(s);
-          return true;
+          return null;
         },
-        () => false,
+        (e: unknown) => describe(e),
       ),
     [session],
   );
 
-  const signOut = useCallback(() => {
-    auth.signOut();
-    writeHint(null);
-    setHint(null);
-    setSession(null);
+  const signOut = useCallback(
+    (keepDeviceCopy = false) => {
+      if (!keepDeviceCopy) replica?.clear();
+      auth.signOut();
+      if (!keepDeviceCopy) {
+        writeHint(null);
+        setHint(null);
+      }
+      setSession(null);
+    },
+    [replica],
+  );
+
+  /** The demo plan, once, right after signing in; the demo starts over empty. */
+  const takeDemo = useCallback(() => {
+    if (!carryDemo.current) return null;
+    carryDemo.current = false;
+    const doc = demoRef.current.latest();
+    const fresh = new MemoryStorage();
+    demoRef.current = fresh;
+    setDemo(fresh);
+    return doc;
   }, []);
 
   const account: Account = session
     ? { kind: 'google', sub: session.user.sub, name: session.user.name, email: session.user.email, reconnect, signOut }
-    : { kind: 'demo', hint, busy, error, signIn };
+    : { kind: 'demo', hint, unsavedOnDevice, busy, error, signIn };
 
-  return <App key={sub ?? 'demo'} storage={drive ?? demo} account={account} />;
+  return drive ? (
+    <App key={sub} storage={drive} account={account} replica={replica ?? undefined} carry={takeDemo} />
+  ) : (
+    <App key="demo" storage={demo} account={account} />
+  );
 }

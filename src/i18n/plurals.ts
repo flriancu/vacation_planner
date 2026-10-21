@@ -1,5 +1,5 @@
 /** Counted phrases. Romanian has three forms: "1 zi", "2 zile", "20 de zile" (from 20 on). */
-export type PluralKey = 'days' | 'leaveDays' | 'floatingDays' | 'excusedDays';
+export type PluralKey = 'days' | 'leaveDays' | 'floatingDays' | 'excusedDays' | 'leaves';
 
 type Lang = 'ro' | 'en';
 type Forms = { one: string; few?: string; other: string };
@@ -10,12 +10,14 @@ const PLURALS: Record<Lang, Record<PluralKey, Forms>> = {
     leaveDays: { one: '{n} zi de concediu', few: '{n} zile de concediu', other: '{n} de zile de concediu' },
     floatingDays: { one: '{n} zi flotantă', few: '{n} zile flotante', other: '{n} de zile flotante' },
     excusedDays: { one: '{n} zi de învoire', few: '{n} zile de învoire', other: '{n} de zile de învoire' },
+    leaves: { one: 'un concediu', few: '{n} concedii', other: '{n} de concedii' },
   },
   en: {
     days: { one: '{n} day', other: '{n} days' },
     leaveDays: { one: '{n} leave day', other: '{n} leave days' },
     floatingDays: { one: '{n} floating day', other: '{n} floating days' },
     excusedDays: { one: '{n} day of excused leave', other: '{n} days of excused leave' },
+    leaves: { one: 'one leave', other: '{n} leaves' },
   },
 };
 

@@ -47,6 +47,16 @@ export function useTheme() {
     return () => media.removeEventListener('change', follow);
   }, [scheme, mode]);
 
+  // Another tab changed them: follow, so the tabs never disagree (or later save a mix of both).
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === SCHEME_KEY) setSchemeState(read(SCHEME_KEY, SCHEMES, 'roz'));
+      if (e.key === MODE_KEY) setModeState(read(MODE_KEY, ['auto', 'light', 'dark'] as const, 'auto'));
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
   const setScheme = useCallback((s: SchemeId) => {
     write(SCHEME_KEY, s);
     setSchemeState(s);

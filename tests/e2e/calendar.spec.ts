@@ -192,7 +192,8 @@ test('the editor date picker: first day, then last day, with a preview (keyboard
   const picker = dialog.getByRole('dialog', { name: 'Alege perioada' });
   await expect(picker).toContainText('Alege prima zi.');
   await expect(picker.locator('[data-day="2027-01-06"]')).toHaveClass(/dp-holiday/);
-  await page.keyboard.press('Enter'); // first day: 4 Jan (focus starts on the current start)
+  await expect(picker.locator('[data-day="2027-01-04"] button')).toBeFocused(); // focus starts on the current start (APG)
+  await page.keyboard.press('Enter'); // first day: 4 Jan
   await expect(picker).toContainText(/Prima zi: luni 4 ianuarie 2027\. Alege acum ultima zi\./);
   await page.keyboard.press('ArrowRight');
   await page.keyboard.press('ArrowRight');

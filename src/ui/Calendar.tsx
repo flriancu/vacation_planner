@@ -37,6 +37,8 @@ interface Selection {
 const FREE_TYPES: ReadonlySet<string> = new Set(['closed']);
 
 const STEPS: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
+/** A press becomes a drag only past this distance, so a trembling click stays one day. */
+const DRAG_PX = 10;
 
 /**
  * Mount one per year (`key={year}`), so selection and focus start fresh.
@@ -53,7 +55,18 @@ export function Calendar({ year, doc, personId, today, onCreate, onOpen }: Props
   const { t, date: fmt, name } = i18n;
   const { from, to } = viewRange(year);
 
-  const days = useMemo(() => buildDays(doc, personId, addDays(from, -40), addDays(to, 40)), [doc, personId, from, to]);
+  // The view plus 40 days each side for the breaks around it, stretched to whole blocks, so a
+  // block's cost reads the same from every year it touches.
+  const days = useMemo(() => {
+    let lo = addDays(from, -40);
+    let hi = addDays(to, 40);
+    for (const b of live(doc.blocks)) {
+      if (b.personId !== personId || !overlaps(b.start, b.end, from, to)) continue;
+      if (b.start < lo) lo = b.start;
+      if (b.end > hi) hi = b.end;
+    }
+    return buildDays(doc, personId, lo, hi);
+  }, [doc, personId, from, to]);
   const weeks = useMemo(() => buildWeeks(from, to), [from, to]);
   // What each block costs and gives, in words: the days' tooltip and screen-reader text (CAL-7).
   const sentences = useMemo(() => {
@@ -68,7 +81,7 @@ export function Calendar({ year, doc, personId, today, onCreate, onOpen }: Props
   const [selection, setSelection] = useState<Selection | null>(null);
   const [pending, setPending] = useState<ISODate | null>(null);
   const [focusDate, setFocusDate] = useState<ISODate>(() => (yearOf(today) === year ? today : `${year}-01-01`));
-  const drag = useRef<{ anchor: ISODate; last: ISODate; moved: boolean } | null>(null);
+  const drag = useRef<{ anchor: ISODate; last: ISODate; moved: boolean; x: number; y: number; stop: () => void } | null>(null);
   const swallowClick = useRef(false);
   const grid = useRef<HTMLDivElement>(null);
 
@@ -91,34 +104,61 @@ export function Calendar({ year, doc, personId, today, onCreate, onOpen }: Props
     setSelection({ anchor: date, focus: date });
   };
 
+  /** Ends a drag without creating anything (Escape, or the browser taking the pointer over). */
+  const cancelDrag = () => {
+    const dr = drag.current;
+    if (!dr) return false;
+    dr.stop();
+    drag.current = null;
+    swallowClick.current = dr.moved;
+    setSelection(null);
+    return true;
+  };
+
   const onPointerDown = (e: ReactPointerEvent, date: ISODate) => {
     // A drag that ends on another day sends its click to a parent, so clear the flag on every new press.
     swallowClick.current = false;
     if ((e.pointerType !== 'mouse' && e.pointerType !== 'pen') || e.button !== 0 || pending) return;
     e.preventDefault(); // no text selection while dragging
-    drag.current = { anchor: date, last: date, moved: false };
     const move = (ev: PointerEvent) => {
+      const dr = drag.current;
+      if (!dr || (!dr.moved && Math.hypot(ev.clientX - dr.x, ev.clientY - dr.y) < DRAG_PX)) return;
       const d = (document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null)?.closest<HTMLElement>('[data-date]')?.dataset
         .date;
-      const dr = drag.current;
-      if (d && dr && d !== dr.last) {
+      if (d && d !== dr.last) {
         dr.moved = true;
         dr.last = d;
         setSelection({ anchor: dr.anchor, focus: d });
       }
     };
-    const up = () => {
-      document.removeEventListener('pointermove', move);
-      document.removeEventListener('pointerup', up);
+    const up = (ev: PointerEvent) => {
       const dr = drag.current;
+      dr?.stop();
       drag.current = null;
-      if (dr?.moved) {
+      if (!dr) return;
+      if (dr.moved) {
         swallowClick.current = true;
         finish(dr.anchor, dr.last);
+        return;
+      }
+      // A press that shook onto the next day without becoming a drag: the browser sends its
+      // click to the row, not to a day, so it counts here as a click on the day it began on.
+      const under = (document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null)?.closest<HTMLElement>('[data-date]');
+      if (under?.dataset.date !== dr.anchor) {
+        grid.current?.querySelector<HTMLElement>(`[data-date="${dr.anchor}"]`)?.focus({ preventScroll: true });
+        setFocusDate(dr.anchor);
+        activate(dr.anchor);
       }
     };
+    const stop = () => {
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', up);
+      document.removeEventListener('pointercancel', cancelDrag);
+    };
+    drag.current = { anchor: date, last: date, moved: false, x: e.clientX, y: e.clientY, stop };
     document.addEventListener('pointermove', move);
     document.addEventListener('pointerup', up);
+    document.addEventListener('pointercancel', cancelDrag);
   };
 
   const onClick = (e: MouseEvent, date: ISODate) => {
@@ -146,6 +186,7 @@ export function Calendar({ year, doc, personId, today, onCreate, onOpen }: Props
       if (selection && selection.anchor !== selection.focus && !pending) finish(selection.anchor, selection.focus);
       else activate(focusDate);
     } else if (e.key === 'Escape') {
+      cancelDrag();
       setSelection(null);
       setPending(null);
     }
@@ -248,6 +289,8 @@ export function Calendar({ year, doc, personId, today, onCreate, onOpen }: Props
                   data-tip={[holidayNames(d), ...info.blocks.map((b) => sentences.get(b.id))].filter(Boolean).join('\n') || undefined}
                   onPointerDown={(e) => onPointerDown(e, d)}
                   onPointerEnter={() => pending && setSelection({ anchor: pending, focus: d })}
+                  // However a day got focus (click, script, a screen reader's cursor), arrows start from it.
+                  onFocus={() => setFocusDate(d)}
                   onClick={(e) => onClick(e, d)}
                 >
                   <span className="num" aria-hidden="true">

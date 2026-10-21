@@ -455,3 +455,72 @@ button.square {
 .tooltip:not(:popover-open):not(.open) {
   display: none;
 }
+
+/* "Not saved · Try again": the error state is a button, still looking like the status. */
+button.status {
+  min-height: var(--ctl-h);
+  padding: 0 0.6rem;
+  border: 1px solid currentColor;
+  border-radius: var(--ctl-radius);
+  background: transparent;
+  font: inherit;
+  font-size: var(--ctl-font);
+  cursor: pointer;
+}
+
+/* "Continue as …": a long name truncates instead of pushing the header past the screen. */
+.header-end > button.primary {
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 599px) {
+  .header-end > button.primary {
+    max-width: 9rem;
+  }
+}
+
+/* Very narrow screens (a fold phone's cover, 280 px): menus never reach past the left edge. */
+.menu-panel {
+  max-width: calc(100vw - 16px);
+}
+
+.load-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.load-state details.detail summary {
+  cursor: pointer;
+}
+
+main.layout:focus {
+  outline: none;
+}
+
+/* The invisible stand-in that catches a double click's second click right after Undo. */
+.toast.toast-settling {
+  width: 12rem;
+  height: 2.5rem;
+  opacity: 0;
+}
+
+/* Printing the year: the calendar only, without the page's controls. */
+@media print {
+  .app-header,
+  .notice,
+  .app-footer,
+  .toast-region,
+  .cal-pending,
+  .side-pane,
+  .above-calendar,
+  .tooltip {
+    display: none !important;
+  }
+  .cal-head {
+    position: static;
+  }
+}

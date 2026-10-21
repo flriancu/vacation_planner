@@ -80,8 +80,8 @@ Priority: **M** = must (v1), **S** = should (v1 if cheap), **v2** = phase 2.
 | BLK-1 | M | Status `idea`: under consideration. It takes nothing from the balance, but the app shows what accepting it would cost. |
 | BLK-2 | M | Status `planned`: I intend to take it. Its cost is reserved from the balance. |
 | BLK-3 | M | Status `approved`: signed off by HR or my manager. Its cost is reserved; once its dates have passed, it counts as **used**. |
-| BLK-4 | M | Status moves forward or back in one step. Changing an `approved` block's dates asks me to confirm. For types that don't need approval (LT-2), `planned` is the final stage. |
-| BLK-5 | M | Blocks of the same person must not overlap, except `idea` blocks, which may overlap each other and other blocks. |
+| BLK-4 | M | Status moves forward or back in one step. Changing an `approved` block's dates shows a warning in the editor (tell HR too); no extra dialog. For types that don't need approval (LT-2), `planned` is the final stage. |
+| BLK-5 | M | Blocks of the same person must not overlap: the editor won't save a planned or approved block over another one. Exceptions: `idea` blocks may overlap each other and other blocks, and leave may span office-closed days (BLK-6). |
 | BLK-6 | M | Leave cost counts working days only. Weekends, public holidays and free office-closed day inside a block cost nothing. |
 
 ### 4.5 Balance (BAL)

@@ -11,6 +11,10 @@ export default defineConfig({
   use: {
     baseURL: `http://localhost:${PORT}/`,
     trace: 'retain-on-failure',
+    // Tests never reach the internet: everything but this machine goes to a proxy that isn't
+    // there, so anything a fake's routes miss (a CORS preflight, a request sent while a page
+    // unloads) fails here instead of reaching Google. Works the same in every browser engine.
+    proxy: { server: 'http://127.0.0.1:1', bypass: 'localhost,127.0.0.1' },
   },
   projects: [
     { name: 'desktop', use: { ...devices['Desktop Chrome'] } },

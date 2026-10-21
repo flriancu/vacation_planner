@@ -19,7 +19,18 @@ export function Notice({ scope, label, children, actions, onClose, closeLabel }:
       <div className="notice-text">{children}</div>
       {actions}
       {onClose && (
-        <button type="button" className="notice-close" onClick={onClose} aria-label={closeLabel} data-tip={closeLabel}>
+        <button
+          type="button"
+          className="notice-close"
+          onClick={(e) => {
+            // The button is about to disappear: hand focus to the content, not to the top of the page (WCAG 2.4.3).
+            const hadFocus = document.activeElement === e.currentTarget;
+            onClose();
+            if (hadFocus) requestAnimationFrame(() => document.querySelector<HTMLElement>('main')?.focus({ preventScroll: true }));
+          }}
+          aria-label={closeLabel}
+          data-tip={closeLabel}
+        >
           ×
         </button>
       )}

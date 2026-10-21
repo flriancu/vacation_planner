@@ -8,6 +8,7 @@
   position: fixed;
   left: 50%;
   bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  transition: bottom 0.15s;
   z-index: 15;
   transform: translateX(-50%);
   max-width: calc(100vw - 32px);
@@ -136,6 +137,11 @@
   background: var(--holiday-mark);
 }
 
+/* On the approved fill the holiday colour all but vanishes (about 1.1:1): use the fill's text colour. */
+.day.base-holiday.fill-approved::before {
+  background: var(--leave-fg);
+}
+
 .day .num {
   position: relative;
   z-index: 1;
@@ -243,5 +249,42 @@
 
   .week {
     grid-template-columns: 1.6rem repeat(7, 1fr);
+  }
+}
+
+/* The undo message and the half-made-selection message share the bottom: stack them. */
+.app:has(.toast:not(.toast-settling)) .cal-pending {
+  bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+/* Windows High Contrast and other forced colours replace every fill with the system background,
+   so days off and leave would look like workdays. Use the system's own colours and lines. */
+@media (forced-colors: active) {
+  .base-weekend .num,
+  .base-holiday .num,
+  .free-block .num {
+    color: GrayText;
+  }
+  .day.base-holiday .num {
+    text-decoration: underline;
+  }
+  .day.base-holiday::before {
+    background: CanvasText;
+  }
+  .fill-approved,
+  .fill-planned {
+    forced-color-adjust: none;
+    background-color: Highlight;
+  }
+  .fill-approved .num,
+  .fill-planned .num {
+    color: HighlightText;
+  }
+  .fill-planned {
+    background-image: repeating-linear-gradient(45deg, transparent 0 4px, Canvas 4px 6px);
+  }
+  .day.base-holiday.fill-approved::before,
+  .day.base-holiday.fill-planned::before {
+    background: HighlightText;
   }
 }

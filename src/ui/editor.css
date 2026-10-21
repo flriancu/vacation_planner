@@ -95,12 +95,20 @@
   font-weight: 600;
 }
 
-.summary .error {
-  color: var(--danger);
+.summary .warning,
+.editor > form > .warning {
+  color: var(--warning);
 }
 
-.summary .warning {
-  color: var(--warning);
+.editor > form > .warning {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+/* "Unsaved changes": the question takes the place of the buttons, in the same row. */
+.editor .actions.confirm {
+  flex-wrap: wrap;
+  font-size: 0.9rem;
 }
 
 .also-here {
@@ -227,6 +235,40 @@
   color: inherit;
 }
 
+/* The range's first and last day: the full accent, like an approved block. DayPicker's own
+   rule for this has the same specificity as the reset above and comes earlier, so restate it. */
+.dp-panel .rdp-range_start .rdp-day_button,
+.dp-panel .rdp-range_end .rdp-day_button {
+  background-color: var(--leave);
+  color: var(--leave-fg);
+}
+
+/* DayPicker enlarges selected days ("large"), which clips two-digit numbers in our cells. */
+.dp-panel .rdp-selected {
+  font-size: inherit;
+}
+
+/* Narrow phones (the WCAG reflow width is 320 px): smaller days, so all seven columns fit. */
+@media (max-width: 360px) {
+  .dp-panel {
+    padding: 0.5rem 0.25rem;
+  }
+  .dp-panel .rdp-root {
+    --rdp-day-height: 2rem;
+    --rdp-day-width: 2rem;
+    --rdp-day_button-height: 1.9rem;
+    --rdp-day_button-width: 1.9rem;
+  }
+}
+@media (max-width: 300px) {
+  .dp-panel .rdp-root {
+    --rdp-day-height: 1.75rem;
+    --rdp-day-width: 1.75rem;
+    --rdp-day_button-height: 1.65rem;
+    --rdp-day_button-width: 1.65rem;
+  }
+}
+
 /* Off-anyway tint and holiday dot, like the main calendar. Range colours win over the tint. */
 .dp-panel .rdp-day.dp-off {
   background: var(--free);
@@ -247,6 +289,12 @@
   margin-left: -2px;
   border-radius: 50%;
   background: var(--holiday-mark);
+}
+
+/* On the accent fill the holiday colour would vanish (about 1.1:1): use the fill's text colour. */
+.dp-panel .rdp-range_start.dp-holiday .rdp-day_button::after,
+.dp-panel .rdp-range_end.dp-holiday .rdp-day_button::after {
+  background: var(--leave-fg);
 }
 
 .dp-panel .rdp-day.rdp-range_middle {

@@ -7,6 +7,7 @@ const SIGN_IN_ERRORS: Record<string, MessageKey> = {
   popup: 'auth.errPopup',
   drive_denied: 'auth.errDrive',
   not_ready: 'auth.errNotReady',
+  blocked: 'auth.errBlocked',
 };
 
 /**
@@ -35,7 +36,7 @@ export function DemoStrip({ account }: { account: Extract<Account, { kind: 'demo
           </button>
         }
       >
-        <p>{t('auth.welcomeBack')}</p>
+        <p>{t(account.unsavedOnDevice ? 'auth.unsavedOnDevice' : 'auth.welcomeBack')}</p>
         {error}
       </Notice>
     );
