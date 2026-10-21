@@ -51,6 +51,7 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
   const i18n = useI18n();
   const { t, name, date: fmt } = i18n;
   const dialog = useRef<HTMLDialogElement>(null);
+  const title = useRef<HTMLHeadingElement>(null);
   const [initial] = useState(() => initialDraft(target, doc));
   const [draft, setDraft] = useState(initial);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -63,6 +64,10 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
 
   useEffect(() => {
     const d = dialog.current;
+    // The title takes focus when the dialog opens, not the first control: on iPhones a focused
+    // drop-down opens its picker at once, over the dialog. (React doesn't put `autoFocus` into
+    // the page, and the dialog looks for the attribute, so it is set here.)
+    title.current?.setAttribute('autofocus', '');
     if (d && !d.open) d.showModal();
   }, []);
 
@@ -165,7 +170,9 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
   return (
     <dialog ref={dialog} className="editor" aria-labelledby="editor-title" onClose={onClose} onCancel={onCancel}>
       <form onSubmit={submit}>
-        <h2 id="editor-title">{t(target.mode === 'new' ? 'editor.new' : 'editor.edit')}</h2>
+        <h2 id="editor-title" ref={title} tabIndex={-1}>
+          {t(target.mode === 'new' ? 'editor.new' : 'editor.edit')}
+        </h2>
 
         {original?.deleted && (
           <p className="warning" role="alert">

@@ -107,3 +107,12 @@ test('planned leave cannot be saved over other planned leave (BLK-5)', async ({ 
   await dialog.getByRole('radio', { name: 'Idee' }).check();
   await expect(dialog.getByRole('button', { name: 'Salvează' })).toBeEnabled();
 });
+
+test('the editor opens with its title focused, not the leave-type list (iPhones open a focused list at once)', async ({ page }) => {
+  const dialog = await newLeave(page, '2027-03-08', '2027-03-10');
+  await expect(dialog.getByRole('heading', { name: 'Concediu nou' })).toBeFocused();
+  await expect(dialog.getByLabel('Tip')).not.toBeFocused();
+  await dialog.getByRole('button', { name: 'Salvează' }).click();
+  await cell(page, '2027-03-09').click();
+  await expect(page.getByRole('dialog').getByRole('heading', { name: 'Editează concediul' })).toBeFocused();
+});
