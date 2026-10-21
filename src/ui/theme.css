@@ -1,0 +1,110 @@
+/* Colour tokens (CAL-4): the old spreadsheet's pinks, plus a dark variant. */
+:root {
+  --bg: #fffafc;
+  --surface: #ffffff;
+  --fg: #2a1f26;
+  --muted: #6f5e68;
+  --line: #eadde4;
+  --weekend: #ffe5f0;
+  --holiday: #ffbdda;
+  --accent: #b0185a;
+  --accent-fg: #ffffff;
+  --month-line: #8e2a5c;
+  --focus: #1f5fd1;
+  --selected: rgb(31 95 209 / 0.2);
+  --danger: #b3261e;
+  --warning: #7a4d00;
+  color-scheme: light;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  line-height: 1.4;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #161216;
+    --surface: #1f191e;
+    --fg: #f4eaf0;
+    --muted: #b8a5b0;
+    --line: #3a2e36;
+    --weekend: #34202c;
+    --holiday: #5b2a43;
+    --accent: #f27ab2;
+    --accent-fg: #1a0d14;
+    --month-line: #e58ab6;
+    --focus: #8ab8ff;
+    --selected: rgb(138 184 255 / 0.25);
+    --danger: #ff8a80;
+    --warning: #f5c46b;
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+button {
+  font: inherit;
+  color: var(--fg);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.4rem 0.8rem;
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: var(--muted);
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+button.primary {
+  background: var(--accent);
+  color: var(--accent-fg);
+  border-color: transparent;
+}
+
+button.primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button.danger {
+  color: var(--danger);
+}
+
+button.link {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  text-decoration: underline;
+  text-align: left;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

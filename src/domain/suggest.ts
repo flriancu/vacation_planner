@@ -82,12 +82,7 @@ export interface SwapOptionScore {
 }
 
 /** For a swap reminder, how good each of its options is as a bridge (DAY-5). */
-export function swapOptionScores(
-  doc: PlanDoc,
-  personId: string,
-  reminder: SwapReminder,
-  opts: SuggestOptions = {},
-): SwapOptionScore[] {
+export function swapOptionScores(doc: PlanDoc, personId: string, reminder: SwapReminder, opts: SuggestOptions = {}): SwapOptionScore[] {
   const maxCost = opts.maxCost ?? DEFAULT_MAX_COST;
   const year = yearOf(reminder.holiday.date);
   const days = buildDays(doc, personId, addDays(yearStart(year), -PAD), addDays(yearEnd(year), PAD));

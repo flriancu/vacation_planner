@@ -60,7 +60,9 @@ describe('suggest: matches a brute-force search (SUG-1)', () => {
         if (cost >= 1 && cost <= maxCost && range.some((d) => days.get(d)!.anchor)) expected.push(`${start}|${end}`);
       }
     }
-    const actual = suggest(b.doc, b.personId, 2027, { maxCost }).filter((c) => !c.assumesSwap).map((c) => `${c.start}|${c.end}`);
+    const actual = suggest(b.doc, b.personId, 2027, { maxCost })
+      .filter((c) => !c.assumesSwap)
+      .map((c) => `${c.start}|${c.end}`);
     expect(actual.sort()).toEqual(expected.sort());
   });
 });
@@ -94,9 +96,17 @@ describe('suggest: rules', () => {
     const b = demo2027();
     const withSwap = suggest(b.doc, b.personId, 2027).filter((c) => c.assumesSwap?.holiday === '2027-01-24');
     // Thu 21 Jan leave + Fri 22 swap + weekend (Sun 24 holiday).
-    expect(withSwap.find((c) => c.start === '2027-01-21')).toMatchObject({ end: '2027-01-24', cost: 1, assumesSwap: { date: '2027-01-22' } });
+    expect(withSwap.find((c) => c.start === '2027-01-21')).toMatchObject({
+      end: '2027-01-24',
+      cost: 1,
+      assumesSwap: { date: '2027-01-22' },
+    });
     // Weekend + Mon 25 swap + Tue 26 leave.
-    expect(withSwap.find((c) => c.start === '2027-01-23')).toMatchObject({ end: '2027-01-26', cost: 1, assumesSwap: { date: '2027-01-25' } });
+    expect(withSwap.find((c) => c.start === '2027-01-23')).toMatchObject({
+      end: '2027-01-26',
+      cost: 1,
+      assumesSwap: { date: '2027-01-25' },
+    });
     // 1 May has no options, so it adds nothing.
     expect(suggest(b.doc, b.personId, 2027).some((c) => c.assumesSwap?.holiday === '2027-05-01')).toBe(false);
   });
