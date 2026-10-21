@@ -260,7 +260,8 @@ The floating and excused balances use the same formulas with their quotas and no
   - on phone, the month name and the notes column fold into their own lines above and below the week.
 - **Selecting days (CAL-8):** pointer events (drag) on desktop; tap start, tap end on touch; Shift+arrow keys on keyboard (NF-6).
 - **Layout:** desktop = calendar + a right sidebar (Balance, Swap reminders, Suggestions); phone = calendar + a bottom sheet with the same three tabs.
-- **Patterns for status (CAL-6):** `idea` = dashed outline; `planned` = solid outline + 30 % fill; `approved` = full fill + a check mark on the label.
+- **Patterns for status (CAL-6):** `idea` = dashed outline; `planned` = solid 2 px outline + 35 % fill; `approved` = 80 % fill + 3 px outline.
+- **Block description (CAL-7):** `ui/describe.ts` turns a block's cost and break into one sentence (plural forms from `i18n/plurals.ts`: "1 zi", "2 zile", "20 de zile"), worded by the budget it draws from; types that spend nothing only say how long the break is. Used by the editor and as the days' `title`.
 
 ## 8. Testing
 

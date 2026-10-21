@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { blockStats } from '../domain/blocks';
-import { buildDays, findOverlaps } from '../domain/calendar';
+import { blockBudget, buildDays, findOverlaps } from '../domain/calendar';
 import { addDays, overlaps, yearOf, type ISODate } from '../domain/dates';
 import { updateRecord } from '../domain/edit';
 import { addRecord, live, STATUS_RANK, typeByKey, type Block, type BlockStatus, type PlanDoc } from '../domain/schema';
 import { swapReminders } from '../domain/swaps';
 import { useI18n } from '../i18n';
+import { describeBlock } from './describe';
 import './editor.css';
 
 export type EditorTarget = { mode: 'new'; start: ISODate; end: ISODate } | { mode: 'edit'; blockId: string };
@@ -42,7 +43,8 @@ function initialDraft(target: EditorTarget, doc: PlanDoc): Draft {
 
 /** Create or edit one block: type, status, dates, note (CAL-8, CAL-9, BLK-*). */
 export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch, onClose }: Props) {
-  const { t, name, date: fmt } = useI18n();
+  const i18n = useI18n();
+  const { t, name, date: fmt } = i18n;
   const dialog = useRef<HTMLDialogElement>(null);
   const [draft, setDraft] = useState(() => initialDraft(target, doc));
   const original: Block | undefined = target.mode === 'edit' ? doc.blocks[target.blockId] : undefined;
@@ -70,11 +72,12 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
         : addRecord(doc, 'blocks', { personId, ...fields }, { now: '', newId: () => DRAFT_ID }).doc;
     const id = target.mode === 'edit' ? target.blockId : DRAFT_ID;
     const days = buildDays(withDraft, personId, addDays(draft.start, -40), addDays(draft.end, 40));
+    const block = withDraft.blocks[id]!;
     return {
-      stats: blockStats(days, withDraft.blocks[id]!),
+      description: describeBlock(i18n, blockStats(days, block), blockBudget(withDraft, block, yearOf(block.start))),
       overlap: findOverlaps(withDraft, personId).some(([a, b]) => a.id === id || b.id === id),
     };
-  }, [doc, personId, target, draft, type.key, valid]);
+  }, [doc, personId, target, draft, type.key, valid, i18n]);
 
   const reminders = type.key === 'swap' && valid ? swapReminders(doc, personId, yearOf(draft.start)) : [];
   const alsoHere =
@@ -165,7 +168,10 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
         <p className="summary" aria-live="polite">
           {!valid && <span className="error">{t('editor.errEnd')}</span>}
           {preview && (
-            <span data-testid="editor-cost">{t('calendar.costGainLong', { cost: preview.stats.cost, gain: preview.stats.gain })}</span>
+            <span data-testid="editor-cost" className="describe">
+              {preview.description.spend && <span className="spend">{preview.description.spend}</span>}
+              <span>{preview.description.get}</span>
+            </span>
           )}
           {preview?.overlap && draft.status !== 'idea' && <span className="warning">{t('editor.warnOverlap')}</span>}
         </p>

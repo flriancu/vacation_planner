@@ -43,8 +43,8 @@ Priority: **M** = must (v1), **S** = should (v1 if cheap), **v2** = phase 2.
 | CAL-3 | M | Separate months with a stepped line that follows the real first day of each month. Show the month name beside the weeks it covers. |
 | CAL-4 | M | Colour each day by type: weekend, public holiday, employer day, and each leave type. Use the spreadsheet's pink palette as the default theme. |
 | CAL-5 | M | A notes column beside each week shows the holiday names in that week (e.g. "Paște", "Rusalii", "Sf. Maria"). |
-| CAL-6 | M | Draw leave blocks as one outline around the whole range, even when it crosses weeks. `idea` = outline only; `planned` = outline plus a light fill; `approved` = solid fill. Colour must never be the only signal: also use pattern, line style or a label. |
-| CAL-7 | M | Label each block with its cost and gain, e.g. "3 → 9". |
+| CAL-6 | M | Draw leave blocks as one outline around the whole range, even when it crosses weeks. `idea` = outline only; `planned` = outline plus a light fill; `approved` = solid fill and a thicker outline. Colour must never be the only signal: also use line style or thickness. |
+| CAL-7 | M | Say in plain words what a block costs and what it gives, with full dates and no abbreviations, e.g. "Folosești 1 zi de concediu → ești liber 5 zile la rând: vineri 27 noiembrie – marți 1 decembrie". Shown in the editor and as the tooltip of the block's days; nothing is written on the calendar itself. |
 | CAL-8 | M | Create a block by selecting a date range (drag on desktop, tap start and tap end on phone), then choose its type and status. |
 | CAL-9 | M | Tapping or clicking a block opens it to edit dates, type, status and note, or to delete it. |
 | CAL-10 | S | Show today's date. |

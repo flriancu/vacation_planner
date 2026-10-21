@@ -81,6 +81,14 @@
   font-size: 0.9rem;
 }
 
+.summary .describe {
+  display: grid;
+}
+
+.summary .spend {
+  font-weight: 600;
+}
+
 .summary .error {
   color: var(--danger);
 }
