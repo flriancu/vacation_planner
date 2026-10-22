@@ -42,17 +42,34 @@ export interface Edges {
   right: boolean;
   bottom: boolean;
   left: boolean;
+  /**
+   * Inner corners: where the outline turns at a right angle around a neighbouring day, the
+   * edge coming from the day above (or below) meets the edge of the day beside it inside this
+   * day's corner, which neither of them draws.
+   */
+  corners: { tl: boolean; tr: boolean; bl: boolean; br: boolean };
 }
 
 /** Which sides of a day cell are on the outline of the range `start`–`end` (CAL-6). */
 export function outlineEdges(date: ISODate, start: ISODate, end: ISODate): Edges {
   const inside = (d: ISODate) => d >= start && d <= end;
+  const at = (n: number) => inside(addDays(date, n));
   const wd = weekday(date);
+  const top = !at(-7);
+  const bottom = !at(7);
+  const left = wd === 0 || !at(-1);
+  const right = wd === 6 || !at(1);
   return {
-    top: !inside(addDays(date, -7)),
-    bottom: !inside(addDays(date, 7)),
-    left: wd === 0 || !inside(addDays(date, -1)),
-    right: wd === 6 || !inside(addDays(date, 1)),
+    top,
+    bottom,
+    left,
+    right,
+    corners: {
+      tl: !top && !left && !at(-8),
+      tr: !top && !right && !at(-6),
+      bl: !bottom && !left && !at(6),
+      br: !bottom && !right && !at(8),
+    },
   };
 }
 

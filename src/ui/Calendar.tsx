@@ -56,6 +56,13 @@ const MAX_OUTLINES = 4;
 /** People drawn as lines under a day; a phone-sized day holds no more (the tooltip names everyone). */
 export const MAX_PEOPLE = 4;
 
+/**
+ * Outlines are nested by range, not by which block owns the day: the block that encloses
+ * another (leave around the office's closure) is drawn outermost. Earlier start first, then
+ * the longer one, so a block keeps the same place on every day it covers.
+ */
+const byRange = (a: Block, b: Block) => a.start.localeCompare(b.start) || b.end.localeCompare(a.end) || a.id.localeCompare(b.id);
+
 const STEPS: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
 /** A press becomes a drag only past this distance, so a trembling click stays one day. */
 const DRAG_PX = 10;
@@ -272,7 +279,8 @@ export function Calendar({ year, doc, personId, today, others = [], together, on
   // A day off is a day off: one accent for all leave (swap days included); office-closed days
   // look like any other day off anyway, with a neutral outline (theme.css).
   const isFree = (b: Block) => FREE_TYPES.has(doc.leaveTypes[b.typeId]?.key ?? '');
-  const typeColor = (b: Block) => (isFree(b) ? 'var(--muted)' : 'var(--leave)');
+  // Office-closed days: a darker shade of the "off anyway" fill, as leave's outline is of the leave fill.
+  const typeColor = (b: Block) => (isFree(b) ? 'var(--free-edge)' : 'var(--leave)');
 
   // Holiday names aren't drawn on the calendar (only a dot): they're in the tooltip, the
   // screen-reader label and this hint line when a day is picked.
@@ -389,17 +397,22 @@ export function Calendar({ year, doc, personId, today, others = [], together, on
                       })}
                     </span>
                   )}
-                  {info.blocks.slice(0, MAX_OUTLINES).map((b, i) => {
-                    const e = outlineEdges(d, b.start, b.end);
-                    return (
-                      <span
-                        key={b.id}
-                        className={`outline st-${b.status}${e.top ? ' e-t' : ''}${e.right ? ' e-r' : ''}${e.bottom ? ' e-b' : ''}${e.left ? ' e-l' : ''}`}
-                        style={{ '--c': typeColor(b), '--i': i } as CSSProperties}
-                        aria-hidden="true"
-                      />
-                    );
-                  })}
+                  {[...info.blocks]
+                    .sort(byRange)
+                    .slice(0, MAX_OUTLINES)
+                    .map((b, i) => {
+                      const e = outlineEdges(d, b.start, b.end);
+                      return (
+                        <span
+                          key={b.id}
+                          className={`outline st-${b.status}${e.top ? ' e-t' : ''}${e.right ? ' e-r' : ''}${e.bottom ? ' e-b' : ''}${e.left ? ' e-l' : ''}`}
+                          style={{ '--c': typeColor(b), '--i': i } as CSSProperties}
+                          aria-hidden="true"
+                        >
+                          {(['tl', 'tr', 'bl', 'br'] as const).map((k) => e.corners[k] && <span key={k} className={`corner ${k}`} />)}
+                        </span>
+                      );
+                    })}
                 </div>
               );
             })}

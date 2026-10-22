@@ -42,6 +42,7 @@
   --danger: #b3261e;
   --warning: #7a4d00;
   --free: #ffe4f0;
+  --free-edge: #d6739f;
   --holiday-mark: #c2185b;
   --month-line: #8a7f86;
   --today-bg: #b0185a;
@@ -64,6 +65,7 @@
   --danger: #ff8a80;
   --warning: #f5c46b;
   --free: #3a2330;
+  --free-edge: #b05a86;
   --holiday-mark: #ff8fc0;
   --month-line: #8f8189;
   --today-bg: #f27ab2;
@@ -87,6 +89,7 @@
   --danger: #b91c1c;
   --warning: #92400e;
   --free: #ececf0;
+  --free-edge: #8e8e99;
   --holiday-mark: #1c1c1e;
   --month-line: #9a9aa3;
   --today-bg: #2563eb;
@@ -109,6 +112,7 @@
   --danger: #f87171;
   --warning: #fbbf24;
   --free: #2a2a31;
+  --free-edge: #7a7a85;
   --holiday-mark: #ececf1;
   --month-line: #6b6b75;
   --today-bg: #60a5fa;
@@ -132,6 +136,7 @@
   --danger: #b00000;
   --warning: #6b4500;
   --free: #d6d6d6;
+  --free-edge: #6b6b6b;
   --holiday-mark: #000000;
   --month-line: #000000;
   --today-bg: #000000;
@@ -154,6 +159,7 @@
   --danger: #ff6b6b;
   --warning: #ffd400;
   --free: #3a3a3a;
+  --free-edge: #a8a8a8;
   --holiday-mark: #ffffff;
   --month-line: #ffffff;
   --today-bg: #ffffff;

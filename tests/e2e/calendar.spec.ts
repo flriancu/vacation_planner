@@ -85,6 +85,27 @@ test('an idea is outlined but not filled, and costs only uncovered days', async 
   await expect(cell(page, '2027-04-27').locator('.outline.st-idea')).toHaveCount(1);
 });
 
+test('leave around an office closure is outlined outside it, the closure inside', async ({ page, isMobile }) => {
+  await selectRange(page, isMobile, '2027-08-10', '2027-08-12');
+  let dialog = page.getByRole('dialog', { name: 'Concediu nou' });
+  await dialog.getByLabel('Tip').selectOption({ label: 'Birou închis' });
+  await dialog.getByRole('radio', { name: 'Planificat' }).check();
+  await dialog.getByRole('button', { name: 'Salvează' }).click();
+  await selectRange(page, isMobile, '2027-08-05', '2027-08-18');
+  dialog = page.getByRole('dialog', { name: 'Concediu nou' });
+  await dialog.getByRole('radio', { name: 'Aprobat' }).check();
+  await dialog.getByRole('button', { name: 'Salvează' }).click();
+  await expect(dialog).toBeHidden();
+  // The closure owns the day, but the leave that encloses it is drawn outermost.
+  const outlines = cell(page, '2027-08-11').locator('.outline');
+  await expect(outlines).toHaveCount(2);
+  await expect(outlines.nth(0)).toHaveClass(/st-approved/);
+  await expect(outlines.nth(0)).toHaveAttribute('style', /--i: 0/);
+  await expect(outlines.nth(1)).toHaveAttribute('style', /--c: var\(--free-edge\); --i: 1/);
+  // The outline turns at the top left of Thu 12 (row 1 starts on Thu 5): the corner is drawn.
+  await expect(cell(page, '2027-08-12').locator('.outline.st-approved .corner.tl')).toHaveCount(1);
+});
+
 test('Escape cancels a half-made selection', async ({ page, isMobile }) => {
   test.skip(isMobile, 'needs a keyboard');
   await cell(page, '2027-03-08').click();

@@ -26,18 +26,30 @@ describe('buildWeeks', () => {
   });
 });
 
+// Thu 5 – Wed 18 Aug 2027: row 1 Thu 5–Sun 8, row 2 the whole week, row 3 Mon 16–Wed 18.
+const e = (d: string) => outlineEdges(d, '2027-08-05', '2027-08-18').corners;
+
 describe('outlineEdges (CAL-6)', () => {
+  it('marks the inner corners of a range that steps across week rows', () => {
+    // Row 1 starts on Thu 5, so the outline turns at the top left of Thu 12.
+    expect(e('2027-08-12').tl).toBe(true);
+    expect(e('2027-08-13').tl).toBe(false);
+    // Row 3 ends on Wed 18, so it turns again at the bottom right of Wed 11.
+    expect(e('2027-08-11').br).toBe(true);
+    expect(e('2027-08-10').br).toBe(false);
+  });
+
   it('outlines a range that crosses a week boundary', () => {
     // Fri 6 – Tue 10 Aug 2027
-    expect(outlineEdges('2027-08-06', '2027-08-06', '2027-08-10')).toEqual({ top: true, right: false, bottom: true, left: true });
-    expect(outlineEdges('2027-08-08', '2027-08-06', '2027-08-10')).toEqual({ top: true, right: true, bottom: true, left: false });
-    expect(outlineEdges('2027-08-09', '2027-08-06', '2027-08-10')).toEqual({ top: true, right: false, bottom: true, left: true });
+    expect(outlineEdges('2027-08-06', '2027-08-06', '2027-08-10')).toMatchObject({ top: true, right: false, bottom: true, left: true });
+    expect(outlineEdges('2027-08-08', '2027-08-06', '2027-08-10')).toMatchObject({ top: true, right: true, bottom: true, left: false });
+    expect(outlineEdges('2027-08-09', '2027-08-06', '2027-08-10')).toMatchObject({ top: true, right: false, bottom: true, left: true });
   });
 
   it('leaves out inner edges of a multi-week range', () => {
     // Mon 2 – Sun 15 Aug 2027: two full weeks
-    expect(outlineEdges('2027-08-04', '2027-08-02', '2027-08-15')).toEqual({ top: true, right: false, bottom: false, left: false });
-    expect(outlineEdges('2027-08-11', '2027-08-02', '2027-08-15')).toEqual({ top: false, right: false, bottom: true, left: false });
+    expect(outlineEdges('2027-08-04', '2027-08-02', '2027-08-15')).toMatchObject({ top: true, right: false, bottom: false, left: false });
+    expect(outlineEdges('2027-08-11', '2027-08-02', '2027-08-15')).toMatchObject({ top: false, right: false, bottom: true, left: false });
   });
 });
 
