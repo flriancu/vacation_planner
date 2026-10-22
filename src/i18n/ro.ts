@@ -149,6 +149,9 @@ export const ro = {
   'import.left': 'Nu se adaugă: {list}.',
   'import.leftExisting': 'deja în planul tău sau șterse din el: {count}',
   'import.leftConflicts': 's-ar suprapune cu concediu planificat sau aprobat, sau ar fi a patra idee într-o zi: {count}',
+  'import.leftUnreadable': 'nu se pot citi (date imposibile, tip lipsă): {count}',
+  'import.types': 'Se adaugă și tipurile de concediu pe care nu le ai: {names}.',
+  'import.converted': 'Zilele flotante din copie ({count}) intră ca zile de concediu de odihnă.',
   'import.leftOther': 'ale altei persoane sau în afara anilor 1900–2099: {count}',
   'import.explain':
     'Se adaugă doar concediile noi. Nimic din planul tău nu se schimbă și nu se șterge, și nici concediile șterse nu revin.',
@@ -208,6 +211,7 @@ export const ro = {
   'share.canEdit': 'poate și modifica',
   'share.canComment': 'poate și comenta',
   'undo.deleted': 'Concediul a fost șters.',
+  'undo.imported': 'Am adăugat din copie {count}.',
   'undo.unfollowed': 'Nu mai urmărești planul lui {name}.',
   'undo.deletedMany': 'Au fost șterse {count}.',
   'undo.action': 'Anulează',

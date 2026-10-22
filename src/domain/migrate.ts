@@ -132,7 +132,7 @@ export function migrate(raw: unknown, now: number = Date.now()): PlanDoc {
         updatedAt: stamp(record.updatedAt, now),
       };
       const valid = VALID[key](record, types);
-      // A deletion keeps only flat fields (which record it was): nothing nested rides along.
+      // A deletion keeps only shallow fields (which record it was, its name): nothing deep rides along.
       if (record.deleted === true) put(kept, id, { ...flat(record), ...meta, deleted: true });
       else if (valid) put(kept, id, { ...record, ...meta });
       else put(set, id, record);
@@ -160,9 +160,14 @@ function deeperThan(value: unknown, limit: number): boolean {
   return false;
 }
 
+const plain = (v: unknown) => v === null || typeof v !== 'object';
+
+/** Flat fields, and objects of flat fields one level down (a leave type's names). */
 function flat(record: Raw): Raw {
   const out: Raw = {};
-  for (const [k, v] of Object.entries(record)) if (v === null || typeof v !== 'object') put(out, k, v);
+  for (const [k, v] of Object.entries(record)) {
+    if (plain(v) || (isObject(v) && Object.values(v).every(plain))) put(out, k, v);
+  }
   return out;
 }
 

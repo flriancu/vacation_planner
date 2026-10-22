@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
-import { addCopy, planCopy, readBackup, toBackup } from '../domain/backup';
+import { addCopy, DEMO_OWNER, planCopy, readBackup, toBackup } from '../domain/backup';
 import { nextStamp } from '../domain/clock';
 import { yearOf, type ISODate } from '../domain/dates';
 import { deleteRecord, restoreRecord, updateRecord } from '../domain/edit';
@@ -84,7 +84,7 @@ export function App({ storage, account, replica, carry }: AppProps) {
     storage,
     init: () => {
       const owner =
-        account.kind === 'google' ? { googleSub: account.sub, personName: account.name } : { googleSub: 'demo', personName: 'Me' };
+        account.kind === 'google' ? { googleSub: account.sub, personName: account.name } : { googleSub: DEMO_OWNER, personName: 'Me' };
       return newPlanDoc(owner, { now: new Date().toISOString(), newId }).doc;
     },
     ...(account.kind === 'google' && { owner: account.sub }),
@@ -371,8 +371,19 @@ function Planner({ doc, sync, storage, saveState, saveError, notices, account }:
     setDataDialog(null);
     const added = planCopy(doc, copy, personId).blocks.length;
     // Worked out again on the plan as it is when the change applies (another tab may have added since).
-    update((d) => addCopy(d, planCopy(d, copy, personId), recordContext(d)));
-    setDataNote({ key: 'import.done', count: added });
+    let addedIds: string[] = [];
+    update((d) => {
+      const plan = planCopy(d, copy, personId);
+      addedIds = plan.blocks.map((b) => b.id);
+      return addCopy(d, plan, recordContext(d).now);
+    });
+    // A mistaken add of hundreds of leaves can be taken back in one go.
+    deleted.current = [];
+    setUndo({
+      id: Date.now(),
+      message: { key: 'undo.imported', count: added },
+      undo: () => update((d) => addedIds.reduce((acc, id) => (acc.blocks[id] ? deleteRecord(acc, 'blocks', id, nextStamp(acc)) : acc), d)),
+    });
   };
 
   // The people whose plans I follow (PPL-3, PPL-4): one line each under my days, in a fixed order.

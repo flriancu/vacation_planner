@@ -111,7 +111,7 @@ export function ImportDialog({
   onAdd: () => void;
   onClose: () => void;
 }) {
-  const { t, plural, lang } = useI18n();
+  const { t, plural, lang, name } = useI18n();
   const parts = (['approved', 'planned', 'idea'] as const)
     .filter((st) => plan.byStatus[st] > 0)
     .map((st) => `${t(`status.${st}`).toLocaleLowerCase(lang)}: ${plan.byStatus[st]}`)
@@ -121,6 +121,7 @@ export function ImportDialog({
       ['existing', 'import.leftExisting'],
       ['conflicts', 'import.leftConflicts'],
       ['other', 'import.leftOther'],
+      ['unreadable', 'import.leftUnreadable'],
     ] as const
   )
     .filter(([k]) => plan.skipped[k] > 0)
@@ -138,6 +139,8 @@ export function ImportDialog({
       ) : (
         <p>{t('import.nothing')}</p>
       )}
+      {plan.types.length > 0 && <p>{t('import.types', { names: plan.types.map((x) => name(x.name)).join(', ') })}</p>}
+      {plan.converted > 0 && <p>{t('import.converted', { count: plan.converted })}</p>}
       {left && <p className="dialog-help">{t('import.left', { list: left })}</p>}
       <p className="dialog-help">{t('import.explain')}</p>
       <div className="actions">
