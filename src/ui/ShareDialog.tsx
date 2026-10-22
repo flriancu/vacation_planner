@@ -99,7 +99,9 @@ export function ShareDialog({
       s.kind === 'anyone'
         ? t('share.anyone')
         : s.kind === 'domain'
-          ? t('share.domain', { domain: s.domain ?? '' })
+          ? s.domain
+            ? t('share.domain', { domain: s.domain })
+            : t('share.someDomain') // Drive may leave the domain's name out
           : s.name
             ? `${displayName(s.name)} (${s.email})`
             : (s.email ?? '');

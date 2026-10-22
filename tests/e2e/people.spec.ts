@@ -170,6 +170,7 @@ test('the share dialog tells the truth about who has the plan', async ({ page })
   drive.failShareLists = 1;
   drive.otherAccess.push(
     { id: 'link', type: 'anyone', role: 'reader' },
+    { id: 'org', type: 'domain', role: 'reader' }, // Drive left the domain's name out
     { id: 'boss', type: 'user', role: 'writer', emailAddress: 'boss@example.test' },
   );
   await open(page, drive);
@@ -182,6 +183,7 @@ test('the share dialog tells the truth about who has the plan', async ({ page })
   await dialog.getByRole('button', { name: 'Încearcă din nou' }).click();
   // Access given in Drive shows too, and what more than reading it allows.
   await expect(dialog.locator('.shares')).toContainText('Oricine are linkul');
+  await expect(dialog.locator('.shares')).toContainText('Toți dintr-un domeniu');
   await expect(dialog.locator('.shares')).toContainText('boss@example.test — poate și modifica');
   // My own address, and one that already has it, are not sent to Google.
   await dialog.getByLabel('Adresa de e-mail').fill('ana@example.test');

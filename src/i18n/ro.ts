@@ -213,6 +213,7 @@ export const ro = {
   'share.retry': 'Încearcă din nou',
   'share.anyone': 'Oricine are linkul',
   'share.domain': 'Toți din {domain}',
+  'share.someDomain': 'Toți dintr-un domeniu',
   'share.canEdit': 'poate și modifica',
   'share.canComment': 'poate și comenta',
   'undo.deleted': 'Concediul a fost șters.',

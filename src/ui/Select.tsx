@@ -27,12 +27,13 @@ const SETTLE_PX = 10;
 
 /**
  * Swallows the second click of a double click (or tap) on an option: the list has closed, so it
- * would land on what the list was covering. A click elsewhere, even a quick one, goes through.
+ * would land on what the list was covering. Any other click, even a quick one in the same place, goes through.
  */
 function settle(x: number, y: number) {
   const until = Date.now() + SETTLE_MS;
   const swallow = (e: MouseEvent) => {
-    if (Date.now() > until || Math.abs(e.clientX - x) > SETTLE_PX || Math.abs(e.clientY - y) > SETTLE_PX) return;
+    // Only the second click of one double click (its click count says so), not a new single click there.
+    if (e.detail < 2 || Date.now() > until || Math.abs(e.clientX - x) > SETTLE_PX || Math.abs(e.clientY - y) > SETTLE_PX) return;
     e.preventDefault();
     e.stopPropagation();
   };

@@ -212,6 +212,7 @@ export const en: Record<MessageKey, string> = {
   'share.retry': 'Try again',
   'share.anyone': 'Anyone with the link',
   'share.domain': 'Everyone at {domain}',
+  'share.someDomain': 'Everyone in a domain',
   'share.canEdit': 'can also edit',
   'share.canComment': 'can also comment',
   'undo.deleted': 'Leave deleted.',
