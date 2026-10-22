@@ -332,3 +332,15 @@ test('tooltips are the app own ones, also above the editor, and Escape dismisses
   await page.keyboard.press('Escape');
   await expect(tip).toBeHidden();
 });
+
+test("the legend's swatches draw their whole outline", async ({ page, isMobile }) => {
+  if (isMobile) await page.getByText('Legendă').first().click();
+  const swatches = page.locator('.legend .swatch:has(.outline)');
+  await expect(swatches).toHaveCount(3);
+  for (const swatch of await swatches.all()) {
+    const box = (await swatch.boundingBox())!;
+    const outline = (await swatch.locator('.outline').boundingBox())!;
+    expect(outline.width).toBeCloseTo(box.width, 0);
+    expect(outline.height).toBeCloseTo(box.height, 0);
+  }
+});

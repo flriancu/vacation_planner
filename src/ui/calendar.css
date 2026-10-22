@@ -227,7 +227,7 @@
 }
 
 .outline {
-  --in: calc(var(--i, 0) * var(--step));
+  --in: calc(var(--i, 0) * var(--step, 3px));
   --w: 2px;
   position: absolute;
   inset: 0;
