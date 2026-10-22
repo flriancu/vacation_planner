@@ -1,6 +1,7 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { toUTC, type ISODate } from '../domain/dates';
 import type { Names } from '../domain/schema';
+import { displayName } from '../domain/text';
 import { en } from './en';
 import { pluralize, type PluralKey } from './plurals';
 import { ro, type MessageKey } from './ro';
@@ -17,7 +18,7 @@ export interface I18n {
   t: (key: MessageKey, params?: Record<string, string | number>) => string;
   /** A counted phrase in the right grammatical form: "1 zi", "2 zile", "20 de zile". */
   plural: (key: PluralKey, n: number) => string;
-  /** Picks the right half of a `{ ro, en }` pair. */
+  /** Picks the right half of a `{ ro, en }` pair, safe to show (plans may come from someone else). */
   name: (names: Names) => string;
   /** Dates are whole UTC days (domain/dates.ts), so every format runs in UTC. */
   date: (date: ISODate, options: Intl.DateTimeFormatOptions) => string;
@@ -34,7 +35,7 @@ export function I18nProvider({ lang, setLang, children }: { lang: Lang; setLang:
       setLang,
       t: (key, params) => dict[key].replace(/\{(\w+)\}/g, (_, p: string) => String(params?.[p] ?? `{${p}}`)),
       plural: (key, n) => pluralize(lang, key, n),
-      name: (names) => names[lang],
+      name: (names) => displayName(String(names[lang] ?? '')),
       date: (date, options) => {
         const key = JSON.stringify(options);
         let f = formatters.get(key);

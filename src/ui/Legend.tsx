@@ -9,7 +9,11 @@ import { useI18n } from '../i18n';
 export function BlockSwatch({ status, free = false }: { status: BlockStatus; free?: boolean }) {
   const fill = status === 'idea' ? (free ? 'fill-none' : 'idea-only') : free ? 'free-block' : `fill-${status}`;
   return (
-    <span className={`swatch ${fill}`} style={{ '--c': free ? 'var(--free-edge)' : 'var(--leave)' } as CSSProperties} aria-hidden="true">
+    <span
+      className={`swatch ${fill}${free ? ' free' : ''}`}
+      style={{ '--c': free ? 'var(--free-edge)' : 'var(--leave)' } as CSSProperties}
+      aria-hidden="true"
+    >
       <span className={`outline st-${status} e-t e-r e-b e-l`} />
     </span>
   );

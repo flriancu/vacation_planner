@@ -152,20 +152,25 @@
 
 /* ---- Select (Select.tsx): a drop-down whose options show a swatch ---- */
 .select {
+  position: relative;
   display: grid;
   gap: 0.2rem;
 }
 
 .select-label {
+  justify-self: start;
   font-size: 0.85rem;
   color: var(--muted);
+  cursor: default;
 }
 
 .select-field {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.4rem 0.5rem;
+  min-height: var(--ctl-h);
+  padding: 0.25rem 0.5rem;
+  font-size: var(--ctl-font);
   color: var(--fg);
   background: var(--bg);
   border: 1px solid var(--line);
@@ -174,14 +179,21 @@
   user-select: none;
 }
 
+.select-field[aria-disabled='true'] {
+  color: var(--muted);
+  cursor: default;
+}
+
 .select-field.active {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent);
 }
 
-.select-value {
+.select-value,
+.select-option-label {
   flex: 1;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .select-chevron {
@@ -194,42 +206,56 @@
   flex-shrink: 0;
 }
 
-/* In the page's flow below the field, like the month calendar: a dialog never clips it. */
+/* Floats over what is below the field: opening or closing it never moves another control. */
 .select-list {
-  max-height: 18rem;
-  margin: 0;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: 0;
+  z-index: 5;
+  max-height: min(18rem, 50vh);
+  margin-top: 2px;
   padding: 0.25rem;
   overflow-y: auto;
-  list-style: none;
+  overscroll-behavior: contain;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.18);
 }
 
 .select-list [role='option'] {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  min-height: 2.5rem;
+  min-height: var(--ctl-h);
   padding: 0.25rem 0.5rem;
   border-radius: 6px;
   cursor: pointer;
 }
 
+/* The option in reach: a tint plus a ring in the focus colour (3:1 against the list, which
+   a tint alone can't give). */
 .select-list [role='option'].active {
   background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  box-shadow: inset 0 0 0 2px var(--focus);
 }
 
 /* The chosen type keeps a tick, so it stays findable while the arrows move away from it. */
-.select-list [role='option'].current::after {
-  content: '✓';
-  margin-left: auto;
+.select-tick {
+  flex-shrink: 0;
   color: var(--accent);
 }
 
 @media (forced-colors: active) {
   .select-list [role='option'].active {
     outline: 2px solid Highlight;
+  }
+
+  /* Colours are gone: office closed's swatch gets a hatch so it still differs from leave. */
+  .swatch.free {
+    forced-color-adjust: none;
+    background: repeating-linear-gradient(45deg, CanvasText 0 1px, Canvas 1px 4px);
   }
 }
 

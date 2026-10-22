@@ -24,7 +24,7 @@ interface PickerBuilder {
   setAppId(appId: string): PickerBuilder;
   setLocale(locale: string): PickerBuilder;
   setTitle(title: string): PickerBuilder;
-  setCallback(callback: (result: { action: string; docs?: { id: string; name: string }[] }) => void): PickerBuilder;
+  setCallback(callback: (result: { action: string; docs?: { id: string; name?: string }[] }) => void): PickerBuilder;
   build(): { setVisible(visible: boolean): void };
 }
 type WithPicker = Window & {
@@ -33,21 +33,31 @@ type WithPicker = Window & {
 };
 
 let loading: Promise<PickerApi> | null = null;
+/** A picker script that loads but never calls back counts as a failure after this long. */
+const LOAD_TIMEOUT_MS = 30_000;
 
 function loadPicker(): Promise<PickerApi> {
   const w = window as WithPicker;
   if (w.google?.picker) return Promise.resolve(w.google.picker);
   loading ??= new Promise<PickerApi>((resolve, reject) => {
+    const timer = setTimeout(() => fail(), LOAD_TIMEOUT_MS);
     const fail = () => {
+      clearTimeout(timer);
       loading = null;
       reject(new Error('Could not load the Google file picker'));
+    };
+    const done = () => {
+      clearTimeout(timer);
+      if (w.google?.picker) resolve(w.google.picker);
+      else fail();
     };
     const script = document.createElement('script');
     script.src = API_SRC;
     script.async = true;
     script.addEventListener(
       'load',
-      () => w.gapi?.load('picker', { callback: () => (w.google?.picker ? resolve(w.google.picker) : fail()), onerror: fail }) ?? fail(),
+      // gapi.load returns nothing and calls back later: only a missing gapi is a failure here.
+      () => (w.gapi ? w.gapi.load('picker', { callback: done, onerror: fail }) : fail()),
       { once: true },
     );
     script.addEventListener('error', fail, { once: true });
@@ -85,7 +95,7 @@ export async function pickSharedPlan({ token, apiKey, appId, locale, title }: Pi
       .setLocale(locale)
       .setTitle(title)
       .setCallback((result) => {
-        if (result.action === picker.Action.PICKED && result.docs?.[0]) resolve({ id: result.docs[0].id, name: result.docs[0].name });
+        if (result.action === picker.Action.PICKED && result.docs?.[0]) resolve({ id: result.docs[0].id, name: result.docs[0].name ?? '' });
         else if (result.action === picker.Action.CANCEL) resolve(null);
       })
       .build()

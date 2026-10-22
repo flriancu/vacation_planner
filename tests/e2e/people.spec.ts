@@ -74,7 +74,7 @@ test('a followed plan shows as a line under my days, named in the legend and the
   await dialog.getByRole('radio', { name: 'Aprobat' }).check();
   await dialog.getByRole('button', { name: 'Salvează' }).click();
   await expect(cell(page, '2027-03-10').locator('.together.st-approved')).toHaveCount(1);
-  await expect(cell(page, '2027-03-10')).toHaveAttribute('data-tip', /Toți sunteți liberi/);
+  await expect(cell(page, '2027-03-10')).toHaveAttribute('data-tip', /Toți cei afișați și tu sunteți liberi/);
   await expect(cell(page, '2027-03-08').locator('.together')).toHaveCount(0); // I work that day
 
   // Switched off: no line, still followed, and it syncs (it's in my plan).
@@ -82,6 +82,62 @@ test('a followed plan shows as a line under my days, named in the legend and the
   await expect(cell(page, '2027-03-10').locator('.line')).toHaveCount(0);
   await expect(panel).toContainText('ascuns');
   await expect.poll(() => Object.values(drive.content().following as Record<string, { hidden?: boolean }>)[0]?.hidden).toBe(true);
+});
+
+test('a plan that stops being readable says so and is no longer drawn', async ({ page }) => {
+  const drive = new FakeDrive();
+  const mihai = drive.addShared(mihaisPlan());
+  await open(page, drive);
+  await follow(page, mihai);
+  await expect(cell(page, '2027-03-10').locator('.line.st-approved')).toHaveCount(1);
+  drive.files.delete(mihai); // sharing stopped
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await expect(page.locator('.people')).toContainText('nu se poate citi: nu mai e împărțit cu tine sau a fost șters');
+  await expect(cell(page, '2027-03-10').locator('.line.st-approved')).toHaveCount(0);
+});
+
+test('"everyone off" is said only when every plan shown has loaded', async ({ page }) => {
+  const drive = new FakeDrive();
+  const mihai = drive.addShared(mihaisPlan());
+  await open(page, drive);
+  await cell(page, '2027-03-09').click();
+  await cell(page, '2027-03-11').click();
+  const dialog = page.getByRole('dialog', { name: 'Concediu nou' });
+  await dialog.getByRole('radio', { name: 'Aprobat' }).check();
+  await dialog.getByRole('button', { name: 'Salvează' }).click();
+  await follow(page, mihai);
+  await expect(cell(page, '2027-03-10').locator('.together')).toHaveCount(1);
+  await follow(page, 'shared-404'); // a plan that can't be read: nobody knows if they are off
+  await expect(page.locator('.people')).toContainText('nu se poate citi');
+  await expect(cell(page, '2027-03-10').locator('.together')).toHaveCount(0);
+  await expect(cell(page, '2027-03-10')).not.toHaveAttribute('data-tip', /liberi/);
+});
+
+test('two quick clicks on "Follow" follow the plan once, and an unfollow can be undone', async ({ page }) => {
+  const drive = new FakeDrive();
+  const mihai = drive.addShared(mihaisPlan());
+  await open(page, drive);
+  await page.evaluate((pick) => ((window as unknown as { fakePick: unknown }).fakePick = pick), {
+    id: mihai,
+    name: 'vacation-planner.json',
+  });
+  await page.getByRole('button', { name: 'Urmărește un plan…' }).dblclick();
+  const panel = page.locator('.people');
+  await expect(panel).toContainText('linia 1');
+  await expect(panel.getByRole('listitem').filter({ hasText: 'Mihai' })).toHaveCount(1);
+  await panel.getByRole('button', { name: /Nu mai urmări planul lui Mihai/ }).click();
+  await expect(page.getByText('Nu mai urmărești planul lui Mihai.')).toBeVisible();
+  await page.getByRole('button', { name: 'Anulează' }).click();
+  await expect(panel).toContainText('linia 1');
+});
+
+test('a copy of my own plan shared back to me is not drawn as someone else', async ({ page }) => {
+  const drive = new FakeDrive();
+  const copy = drive.addShared({ ...mihaisPlan(), owner: { googleSub: 'u1' } });
+  await open(page, drive);
+  await follow(page, copy);
+  await expect(page.locator('.people')).toContainText('e tot planul tău');
+  await expect(cell(page, '2027-03-10').locator('.line.st-approved')).toHaveCount(0);
 });
 
 test('my own plan is not followed', async ({ page }) => {

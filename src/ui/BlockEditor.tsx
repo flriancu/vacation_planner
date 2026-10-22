@@ -213,6 +213,7 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
             icon: <BlockSwatch status={draft.status} free={looksFree(lt.key)} />,
           }))}
           onChange={changeType}
+          missing={t('editor.typeDeleted', { name: name(type.name) })}
         />
 
         <fieldset className="statuses">
@@ -245,17 +246,17 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
         />
 
         {type.key === 'swap' && (
-          <label>
-            {t('editor.swapFor')}
-            <select value={swapFor ?? ''} onChange={(e) => set({ swapFor: e.target.value })} disabled={freeHolidays.length === 0}>
-              {freeHolidays.length === 0 && <option value="">{t('editor.swapNone')}</option>}
-              {freeHolidays.map((h) => (
-                <option key={h.date} value={h.date}>
-                  {fmt(h.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} — {h.names.map(name).join(' · ')}
-                </option>
-              ))}
-            </select>
-          </label>
+          <Select
+            label={t('editor.swapFor')}
+            value={swapFor ?? ''}
+            options={freeHolidays.map((h) => ({
+              value: h.date,
+              label: `${fmt(h.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} — ${h.names.map(name).join(' · ')}`,
+            }))}
+            onChange={(date) => set({ swapFor: date })}
+            disabled={freeHolidays.length === 0}
+            missing={t('editor.swapNone')}
+          />
         )}
 
         <label>

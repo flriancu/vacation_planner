@@ -9,7 +9,7 @@ export interface UndoOffer {
   /** Changes on each offer, so another delete restarts the timer. */
   id: number;
   /** Shown in the current language, so a language switch while it shows translates it too. */
-  message: { key: MessageKey; count?: number };
+  message: { key: MessageKey; count?: number; params?: Record<string, string> };
   undo: () => void;
 }
 
@@ -30,7 +30,7 @@ export function UndoToast({ offer, onDone }: { offer: UndoOffer | null; onDone: 
     return () => window.clearTimeout(timer);
   }, [settling]);
 
-  const message = offer && t(offer.message.key, { count: plural('leaves', offer.message.count ?? 1) });
+  const message = offer && t(offer.message.key, { ...offer.message.params, count: plural('leaves', offer.message.count ?? 1) });
 
   return (
     <div className="toast-region" role="status" aria-live="polite">

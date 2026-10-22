@@ -111,15 +111,19 @@ test('the leave type list shows each type as the calendar draws it', async ({ pa
   await selectRange(page, isMobile, '2027-08-10', '2027-08-12');
   const dialog = page.getByRole('dialog', { name: 'Concediu nou' });
   const field = dialog.getByRole('combobox', { name: 'Tip' });
-  await expect(field).toHaveAccessibleName('Tip Concediu de odihnă');
+  await expect(field).toHaveText('Concediu de odihnă');
   await dialog.getByRole('radio', { name: 'Planificat' }).check();
-  await field.click();
+  if (isMobile) await field.tap();
+  else await field.click();
   await expect(field).toHaveAttribute('aria-expanded', 'true');
   // Office closed in the "off anyway" colours, the other types in the leave colours, in the chosen status.
   await expect(dialog.getByRole('option', { name: 'Birou închis' }).locator('.swatch')).toHaveClass(/free-block/);
   await expect(dialog.getByRole('option', { name: 'Învoire' }).locator('.swatch')).toHaveClass(/fill-planned/);
-  await dialog.getByRole('option', { name: 'Birou închis' }).click();
-  await expect(field).toHaveAccessibleName('Tip Birou închis');
+  // A tap on a phone (Safari once sent no click for it), a click elsewhere.
+  const closed = dialog.getByRole('option', { name: 'Birou închis' });
+  if (isMobile) await closed.tap();
+  else await closed.click();
+  await expect(field).toHaveText('Birou închis');
   await expect(dialog.getByRole('listbox')).toBeHidden();
 });
 
@@ -138,12 +142,51 @@ test('the leave type list works from the keyboard, and Escape closes only the li
   await page.keyboard.type('bi');
   await expect(field).toHaveAttribute('aria-activedescendant', /.+/);
   await page.keyboard.press('Enter');
-  await expect(field).toHaveAccessibleName('Tip Birou închis');
+  await expect(field).toHaveText('Birou închis');
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('End');
   await page.keyboard.press('Enter');
-  await expect(field).toHaveAccessibleName('Tip Concediu fără plată');
+  await expect(field).toHaveText('Concediu fără plată');
   await expect(field).toBeFocused();
+  // A whole name, spaces included: the space is part of the search, not "choose".
+  await page.keyboard.type('Concediu m');
+  await page.keyboard.press('Enter');
+  await expect(field).toHaveText('Concediu medical');
+  await page.waitForTimeout(600);
+  await page.keyboard.type('concediu de');
+  await page.keyboard.press('Enter');
+  await expect(field).toHaveText('Concediu de odihnă');
+});
+
+test('the open leave type list moves nothing, and a tap beside it closes it without acting', async ({ page, isMobile }) => {
+  await selectRange(page, isMobile, '2027-08-09', '2027-08-11');
+  let dialog = page.getByRole('dialog', { name: 'Concediu nou' });
+  await dialog.getByRole('button', { name: 'Salvează' }).click();
+  await cell(page, '2027-08-10').click();
+  dialog = page.getByRole('dialog', { name: 'Editează concediul' });
+  const remove = dialog.getByRole('button', { name: 'Șterge' });
+  const before = await remove.boundingBox();
+  await dialog.getByRole('combobox', { name: 'Tip' }).click();
+  await expect(dialog.getByRole('listbox')).toBeVisible();
+  // The list floats: the buttons below stay where they were.
+  expect(await remove.boundingBox()).toEqual(before);
+  const heading = dialog.getByRole('heading', { name: 'Editează concediul' });
+  if (isMobile) await heading.tap();
+  else await heading.click();
+  await expect(dialog.getByRole('listbox')).toBeHidden();
+  await expect(dialog).toBeVisible();
+  await expect(cell(page, '2027-08-10')).toHaveClass(/idea-only|fill-/);
+});
+
+test("the phone's back gesture closes the open list, not the editor", async ({ page, isMobile }) => {
+  await selectRange(page, isMobile, '2027-08-10', '2027-08-12');
+  const dialog = page.getByRole('dialog', { name: 'Concediu nou' });
+  await dialog.getByRole('combobox', { name: 'Tip' }).click();
+  await expect(dialog.getByRole('listbox')).toBeVisible();
+  // Android's back gesture reaches a modal dialog as a cancelable "cancel" event.
+  await dialog.evaluate((d) => d.dispatchEvent(new Event('cancel', { cancelable: true })));
+  await expect(dialog.getByRole('listbox')).toBeHidden();
+  await expect(dialog).toBeVisible();
 });
 
 test('Escape cancels a half-made selection', async ({ page, isMobile }) => {

@@ -114,7 +114,10 @@ export class FakeDrive {
   }
 }
 
-/** The parts of Google's picker the app uses; picks `window.fakePick` ({ id, name }) or cancels. */
+/**
+ * The parts of Google's picker the app uses; picks `window.fakePick` ({ id, name }) or cancels.
+ * Like the real gapi.load, it returns nothing and calls back later.
+ */
 const FAKE_PICKER = `
 window.gapi = { load(name, o) {
   window.google = window.google || {};
@@ -125,6 +128,6 @@ window.gapi = { load(name, o) {
     build() { const cb = this.cb; return { setVisible() { setTimeout(() => cb(window.fakePick ? { action: 'picked', docs: [window.fakePick] } : { action: 'cancel' }), 0) } } }
   }
   window.google.picker = { ViewId: { DOCS: 'all' }, Action: { PICKED: 'picked', CANCEL: 'cancel' }, DocsView: View, PickerBuilder: Builder };
-  o.callback();
+  setTimeout(() => o.callback(), 20);
 } };
 `;

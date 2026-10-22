@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { addFromBackup, readBackup, summarize, toBackup } from '../domain/backup';
 import { nextStamp } from '../domain/clock';
 import { yearOf, type ISODate } from '../domain/dates';
 import { deleteRecord, restoreRecord, updateRecord } from '../domain/edit';
 import { FIRST_YEAR, LAST_YEAR } from '../domain/holidays';
-import { followed, leaveDays, offTogether, ownPerson } from '../domain/people';
-import { addRecord, live, newPlanDoc, STATUS_RANK, type Block, type Follow, type PlanDoc, type RecordContext } from '../domain/schema';
+import { ownPerson } from '../domain/people';
+import { addRecord, live, newPlanDoc, STATUS_RANK, type Block, type PlanDoc, type RecordContext } from '../domain/schema';
 import { AuthExpiredError } from '../google/auth';
 import { PlanFileGoneError } from '../google/drive';
 import { I18nProvider, useI18n, type Lang } from '../i18n';
@@ -15,16 +15,16 @@ import { PlanMissingError, PlanRemovedError, type DocumentSync } from '../sync/D
 import type { ReplicaStore } from '../sync/Replica';
 import type { Account } from './account';
 import { BlockEditor, type Draft, type EditorTarget } from './BlockEditor';
-import { Calendar, MAX_PEOPLE, type OtherPerson } from './Calendar';
+import { Calendar } from './Calendar';
 import { viewRange } from './calendarModel';
 import { DemoStrip } from './DemoStrip';
 import { errorDetail, errorMessage } from './errors';
 import { CalendarExportDialog, ImportDialog } from './DataDialogs';
 import { saveFile, pickFile } from './download';
 import { Header } from './Header';
-import { PeoplePanel, type PersonRow } from './PeoplePanel';
+import { PeoplePanel } from './PeoplePanel';
 import { ShareDialog } from './ShareDialog';
-import { useFollowed } from './useFollowed';
+import { usePeople } from './usePeople';
 import { Notice } from './Notice';
 import { SidePane } from './SidePane';
 import { useTheme } from './theme';
@@ -212,7 +212,7 @@ interface PlannerProps {
 const clampYear = (y: number) => Math.min(LAST_YEAR, Math.max(FIRST_YEAR, y));
 
 function Planner({ doc, sync, storage, saveState, saveError, notices, account }: PlannerProps) {
-  const { t, lang, plural, name } = useI18n();
+  const { t, lang, plural } = useI18n();
   const { scheme, setScheme, mode, setMode } = useTheme();
   const today = useToday();
   const [year, setYearState] = useState(() => clampYear(yearOf(today)));
@@ -220,7 +220,8 @@ function Planner({ doc, sync, storage, saveState, saveError, notices, account }:
   const [editor, setEditor] = useState<EditorTarget | null>(null);
   /** The day to give focus back to when the editor closes (WCAG 2.4.3). */
   const returnTo = useRef<ISODate | null>(null);
-  const personId = live(doc.people)[0]!.id;
+  // Me: the person with the account (a copy may bring others, even with ids that sort first).
+  const personId = ownPerson(doc)!;
   const { update } = sync;
 
   useEffect(() => {
@@ -361,78 +362,26 @@ function Planner({ doc, sync, storage, saveState, saveError, notices, account }:
   };
 
   // The people whose plans I follow (PPL-3, PPL-4): one line each under my days, in a fixed order.
-  const follows = useMemo(() => followed(doc), [doc]);
-  const plans = useFollowed(
+  const {
+    people,
+    others,
+    together,
+    note: peopleNote,
+    actions: peopleActions,
+  } = usePeople({
+    doc,
     storage,
-    follows.map((f) => f.driveFileId),
-  );
-  const [peopleNote, setPeopleNote] = useState<string | null>(null);
-  const people = useMemo<PersonRow[]>(() => {
-    const byId = new Map(plans.map((p) => [p.calendarId, p]));
-    return follows.map((follow) => {
-      const plan = byId.get(follow.driveFileId);
-      const own = plan?.doc && ownPerson(plan.doc);
-      const fileName = follow.label.replace(/\.json$/i, '');
-      return {
-        follow,
-        name: (own && plan.doc!.people[own]?.name) || fileName,
-        state: plan?.doc ? 'ready' : plan?.error ? 'unreadable' : 'loading',
-      };
-    });
-  }, [follows, plans]);
-  const { others, together } = useMemo(() => {
-    const view = viewRange(year);
-    const byId = new Map(plans.map((p) => [p.calendarId, p]));
-    const shownPeople = people.filter((p) => !p.follow.hidden).slice(0, MAX_PEOPLE);
-    const lines: OtherPerson[] = shownPeople.map((p) => {
-      const theirs = byId.get(p.follow.driveFileId)?.doc;
-      const own = theirs && ownPerson(theirs);
-      return {
-        id: p.follow.id,
-        name: p.name,
-        // Not loaded (yet): an empty line keeps everyone else's place.
-        days: theirs && own ? leaveDays(theirs, own, view.from, view.to) : new Map(),
-        typeName: (day) => (theirs?.leaveTypes[day.block.typeId] ? name(theirs.leaveTypes[day.block.typeId]!.name) : ''),
-      };
-    });
-    const loaded = shownPeople.flatMap((p) => {
-      const theirs = byId.get(p.follow.driveFileId)?.doc;
-      const own = theirs && ownPerson(theirs);
-      return theirs && own ? [{ doc: theirs, personId: own }] : [];
-    });
-    return { others: lines, together: loaded.length ? offTogether([{ doc, personId }, ...loaded], view.from, view.to) : undefined };
-  }, [people, plans, year, doc, personId, name]);
-
-  const peopleActions = {
-    onToggle: (f: Follow) => update((d) => updateRecord(d, 'following', f.id, { hidden: f.hidden ? undefined : true }, nextStamp(d))),
-    onMove: (f: Follow, by: -1 | 1) =>
-      update((d) => {
-        const order = followed(d);
-        const i = order.findIndex((x) => x.id === f.id);
-        const j = i + by;
-        if (i < 0 || j < 0 || j >= order.length) return d;
-        [order[i], order[j]] = [order[j]!, order[i]!];
-        // Every place written down, so the order is the same on every device.
-        return order.reduce(
-          (acc, x, k) => (x.order === k + 1 ? acc : updateRecord(acc, 'following', x.id, { order: k + 1 }, nextStamp(acc))),
-          d,
-        );
-      }),
-    onUnfollow: (f: Follow) => update((d) => deleteRecord(d, 'following', f.id, nextStamp(d))),
-    onFollow: () => {
-      if (account.kind !== 'google') return;
-      setPeopleNote(null);
-      account.pickSharedPlan(t('people.pickerTitle'), lang).then(
-        (file) => {
-          if (!file) return;
-          if (file.id === sync.calendar) setPeopleNote(t('people.own'));
-          else if (follows.some((f) => f.driveFileId === file.id)) setPeopleNote(t('people.already'));
-          else update((d) => addRecord(d, 'following', { driveFileId: file.id, label: file.name }, recordContext(d)).doc);
-        },
-        (e: unknown) => setPeopleNote(t('people.pickError', { reason: t(errorMessage(e)) })),
-      );
+    update,
+    recordContext,
+    ownFileId: sync.calendar,
+    ...(account.kind === 'google' && { mySub: account.sub, pick: account.pickSharedPlan }),
+    personId,
+    year,
+    offerUndo: (message, undoIt) => {
+      deleted.current = [];
+      setUndo({ id: Date.now(), message, undo: undoIt });
     },
-  };
+  });
 
   const noticeText = (n: SyncNotice) =>
     n.kind === 'carried'
@@ -473,7 +422,11 @@ function Planner({ doc, sync, storage, saveState, saveError, notices, account }:
         {width !== 'expanded' && (
           <SidePane
             width={width}
-            people={account.kind === 'google' ? <PeoplePanel people={people} note={peopleNote} {...peopleActions} /> : null}
+            people={
+              account.kind === 'google' ? (
+                <PeoplePanel people={people} note={peopleNote} {...peopleActions} onSignIn={account.reconnect} />
+              ) : null
+            }
           />
         )}
         <Calendar
@@ -490,7 +443,11 @@ function Planner({ doc, sync, storage, saveState, saveError, notices, account }:
         {width === 'expanded' && (
           <SidePane
             width={width}
-            people={account.kind === 'google' ? <PeoplePanel people={people} note={peopleNote} {...peopleActions} /> : null}
+            people={
+              account.kind === 'google' ? (
+                <PeoplePanel people={people} note={peopleNote} {...peopleActions} onSignIn={account.reconnect} />
+              ) : null
+            }
           />
         )}
       </main>

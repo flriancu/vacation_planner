@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { addRecord, live, newPlanDoc, typeByKey, type PlanDoc } from '../../src/domain/schema';
 import { MemoryStorage } from '../../src/storage/MemoryStorage';
-import { FollowedPlans } from '../../src/sync/Followed';
+import { FollowedPlans, MAX_FOLLOWED_RECORDS } from '../../src/sync/Followed';
 import { testContext } from '../fixtures/builder';
 
 const ctx = testContext();
@@ -20,10 +20,10 @@ describe('FollowedPlans (PPL-3)', () => {
     const [ana, gone] = f.getSnapshot();
     expect(live(ana!.doc!.blocks).map((b) => b.start)).toEqual(['2027-08-16']);
     expect(gone!.doc).toBeUndefined();
-    expect(gone!.error).toBeInstanceOf(Error); // the other one still loaded
+    expect(gone!.state).toBe('gone'); // the other one still loaded
   });
 
-  it('picks up changes when refreshed, and keeps the last good copy if a refresh fails', async () => {
+  it('picks up changes when refreshed, and says so when the plan is gone', async () => {
     const storage = new MemoryStorage();
     const a = await storage.create(plan('ana', '2027-08-16'));
     const f = new FollowedPlans(storage);
@@ -34,8 +34,46 @@ describe('FollowedPlans (PPL-3)', () => {
     expect(live(f.getSnapshot()[0]!.doc!.blocks).map((b) => b.start)).toEqual(['2027-09-01']);
     await storage.remove(a.calendarId); // sharing stopped
     await f.refresh();
-    expect(f.getSnapshot()[0]!.error).toBeDefined();
-    expect(f.getSnapshot()[0]!.doc).toBeDefined();
+    expect(f.getSnapshot()[0]!.state).toBe('gone');
+    expect(f.getSnapshot()[0]!.doc).toBeUndefined();
+  });
+
+  it('keeps what it loaded through a passing failure, says it is stale, and tries again', async () => {
+    vi.useFakeTimers();
+    try {
+      const storage = new MemoryStorage();
+      const a = await storage.create(plan('ana', '2027-08-16'));
+      const f = new FollowedPlans(storage, () => 1000);
+      await f.set([a.calendarId]);
+      const { version } = await storage.load(a.calendarId);
+      await storage.save(a.calendarId, plan('ana', '2027-09-01'), version);
+      const load = storage.load.bind(storage);
+      let offline = true;
+      storage.load = (id) => (offline ? Promise.reject(Object.assign(new Error('offline'), { retryable: true })) : load(id));
+      await f.refresh();
+      expect(f.getSnapshot()[0]).toMatchObject({ state: 'stale', loadedAt: 1000 });
+      expect(live(f.getSnapshot()[0]!.doc!.blocks).map((b) => b.start)).toEqual(['2027-08-16']);
+      offline = false;
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(f.getSnapshot()[0]!.state).toBe('ready');
+      expect(live(f.getSnapshot()[0]!.doc!.blocks).map((b) => b.start)).toEqual(['2027-09-01']);
+      f.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('refuses a plan too big to draw', async () => {
+    const storage = new MemoryStorage();
+    const small = plan('ana', '2027-08-16');
+    const block = Object.values(small.blocks)[0]!;
+    const blocks = Object.fromEntries(Array.from({ length: MAX_FOLLOWED_RECORDS }, (_, i) => [`b${i}`, { ...block, id: `b${i}` }]));
+    const big = { ...small, blocks };
+    const a = await storage.create(big);
+    const f = new FollowedPlans(storage);
+    await f.set([a.calendarId]);
+    expect(f.getSnapshot()[0]!.state).toBe('unsupported');
+    expect(f.getSnapshot()[0]!.doc).toBeUndefined();
   });
 
   it('drops a plan that is no longer followed', async () => {
