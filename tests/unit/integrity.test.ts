@@ -305,4 +305,11 @@ describe('records no real plan has (adversarial fixes)', () => {
     raw.blocks[block.id] = { ...raw.blocks[block.id], extra: { a: { b: 1 } } };
     expect(migrate(raw).blocks[block.id]).not.toHaveProperty('extra');
   });
+
+  it('keeps the names of a deleted leave type: leave of it still shows what it was', () => {
+    const b = new DocBuilder();
+    const type = b.add('leaveTypes', { name: { ro: 'Curs', en: 'Course' }, color: '#000000', budget: 'none', needsApproval: true });
+    const raw = toFile(deleteRecord(b.doc, 'leaveTypes', type.id, nextStamp(b.doc)));
+    expect(migrate(raw).leaveTypes[type.id]!.name).toEqual({ ro: 'Curs', en: 'Course' });
+  });
 });

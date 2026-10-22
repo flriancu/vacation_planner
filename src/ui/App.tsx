@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { addCopy, DEMO_OWNER, planCopy, readBackup, toBackup } from '../domain/backup';
 import { nextStamp } from '../domain/clock';
 import { yearOf, type ISODate } from '../domain/dates';
@@ -367,6 +367,11 @@ function Planner({ doc, sync, storage, saveState, saveError, notices, account }:
     exportCalendar: () => setDataDialog({ kind: 'calendar' }),
     ...(account.kind === 'google' && canShare(storage) && { share: () => setDataDialog({ kind: 'share' }) }),
   };
+  // The preview, worked out once per copy and plan (a big copy takes a moment), not on every render.
+  const copyPlan = useMemo(
+    () => (dataDialog?.kind === 'import' ? planCopy(doc, dataDialog.copy, personId) : null),
+    [dataDialog, doc, personId],
+  );
   const addFromCopy = (copy: PlanDoc) => {
     setDataDialog(null);
     const added = planCopy(doc, copy, personId).blocks.length;
@@ -392,6 +397,7 @@ function Planner({ doc, sync, storage, saveState, saveError, notices, account }:
     others,
     together,
     note: peopleNote,
+    waiting: peopleWaiting,
     actions: peopleActions,
   } = usePeople({
     doc,
@@ -399,7 +405,7 @@ function Planner({ doc, sync, storage, saveState, saveError, notices, account }:
     update,
     recordContext,
     ownFileId: sync.calendar,
-    ...(account.kind === 'google' && { mySub: account.sub, pick: account.pickSharedPlan }),
+    ...(account.kind === 'google' && { mySub: account.sub, pick: account.pickSharedPlan, reconnect: account.reconnect }),
     personId,
     year,
     offerUndo: (message, undoIt) => {
@@ -449,7 +455,7 @@ function Planner({ doc, sync, storage, saveState, saveError, notices, account }:
             width={width}
             people={
               account.kind === 'google' ? (
-                <PeoplePanel people={people} note={peopleNote} {...peopleActions} onSignIn={account.reconnect} />
+                <PeoplePanel people={people} note={peopleNote} waiting={peopleWaiting} {...peopleActions} />
               ) : null
             }
           />
@@ -470,7 +476,7 @@ function Planner({ doc, sync, storage, saveState, saveError, notices, account }:
             width={width}
             people={
               account.kind === 'google' ? (
-                <PeoplePanel people={people} note={peopleNote} {...peopleActions} onSignIn={account.reconnect} />
+                <PeoplePanel people={people} note={peopleNote} waiting={peopleWaiting} {...peopleActions} />
               ) : null
             }
           />
@@ -499,7 +505,7 @@ function Planner({ doc, sync, storage, saveState, saveError, notices, account }:
       )}
       {dataDialog?.kind === 'import' && (
         <ImportDialog
-          plan={planCopy(doc, dataDialog.copy, personId)}
+          plan={copyPlan!}
           fileName={dataDialog.name}
           onAdd={() => addFromCopy(dataDialog.copy)}
           onClose={() => setDataDialog(null)}

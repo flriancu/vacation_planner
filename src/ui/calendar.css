@@ -186,36 +186,28 @@
   box-shadow: inset 0 0 0 4px var(--surface);
 }
 
-/* Stepped month separator (CAL-3): long neutral dashes, so it never reads as an idea's short
-   dashes. Drawn as a background, not a border, so the day's inside (where outlines sit)
-   keeps its size on every day. */
-.day.m-top,
-.day.m-left {
-  background-repeat: no-repeat;
+/* Stepped month separator (CAL-3): long neutral dashes with gaps of the page colour, so it
+   never reads as an idea's short dashes and shows on any fill. Its own layer above the
+   outlines (a block's edge never hides it), and outside the day's inside, so outlines keep
+   their place on every day. */
+.month-edge {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  left: 0;
+  pointer-events: none;
 }
 
-.day.m-top {
-  background-image: repeating-linear-gradient(to right, var(--month-line) 0 10px, transparent 10px 15px);
-  background-size: 100% 2px;
-  background-position: top left;
+.month-edge.top {
+  right: 0;
+  height: 2px;
+  background: repeating-linear-gradient(to right, var(--month-line) 0 10px, var(--surface) 10px 15px);
 }
 
-.day.m-left {
-  background-image: repeating-linear-gradient(to bottom, var(--month-line) 0 10px, transparent 10px 15px);
-  background-size: 2px 100%;
-  background-position: top left;
-}
-
-.day.m-top.m-left {
-  background-image:
-    repeating-linear-gradient(to right, var(--month-line) 0 10px, transparent 10px 15px),
-    repeating-linear-gradient(to bottom, var(--month-line) 0 10px, transparent 10px 15px);
-  background-size:
-    100% 2px,
-    2px 100%;
-  background-position:
-    top left,
-    top left;
+.month-edge.left {
+  bottom: 0;
+  width: 2px;
+  background: repeating-linear-gradient(to bottom, var(--month-line) 0 10px, var(--surface) 10px 15px);
 }
 
 /* Block outlines: one layer per block, edges only where the block ends (CAL-6). Nested
@@ -335,7 +327,8 @@
   margin: 0;
 }
 
-/* One slot per person, the same on every day, with or without a line in it: line 1 on top. */
+/* One slot per person, the same on every day, with or without a line in it: line 1 on top.
+   Tighter with three or four, so the lines stay clear of the day's number. */
 .lines {
   --pitch: 5px;
   position: absolute;
@@ -347,8 +340,13 @@
   pointer-events: none;
 }
 
-/* Neutral ink on every fill, with a thin edge of the page colour so it stands out on the
-   leave fill too (one ink, not white on some days and grey on others). */
+.lines.dense {
+  --pitch: 4px;
+  bottom: 3px;
+}
+
+/* The ink of the day's number: neutral on most days, the number's own colour on the approved
+   fill, where a neutral line would barely show. */
 .line {
   --ink: color-mix(in srgb, var(--fg) 80%, transparent);
   position: absolute;
@@ -356,7 +354,10 @@
   right: 0;
   bottom: calc((var(--n) - 1 - var(--k)) * var(--pitch));
   height: 0;
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--surface) 85%, transparent);
+}
+
+.day.fill-approved .line {
+  --ink: var(--leave-fg);
 }
 
 .line.st-idea {
@@ -385,7 +386,7 @@
 .together {
   position: absolute;
   z-index: 2;
-  top: 1px;
+  top: 2px;
   left: 0;
   right: 0;
   border-top: 5px double var(--fg);
@@ -432,12 +433,14 @@
     forced-color-adjust: none;
     background-color: GrayText;
   }
-  /* Gradients are dropped: month separators go back to borders, dotted (ideas are dashed). */
-  .day.m-top {
-    border-top: 2px dotted GrayText;
+  /* Gradients are dropped: month separators are dotted lines in the text colour (ideas are dashed, people grey). */
+  .month-edge.top {
+    background: none;
+    border-top: 2px dotted CanvasText;
   }
-  .day.m-left {
-    border-left: 2px dotted GrayText;
+  .month-edge.left {
+    background: none;
+    border-left: 2px dotted CanvasText;
   }
   /* One system colour per kind of line: outlines in the text colour, people in grey, the
      together mark in the highlight; on approved days (the highlight) the highlight's text colour. */

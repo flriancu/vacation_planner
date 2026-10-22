@@ -72,7 +72,7 @@ describe('FollowedPlans (PPL-3)', () => {
     const a = await storage.create(big);
     const f = new FollowedPlans(storage);
     await f.set([a.calendarId]);
-    expect(f.getSnapshot()[0]!.state).toBe('unsupported');
+    expect(f.getSnapshot()[0]!.state).toBe('tooBig');
     expect(f.getSnapshot()[0]!.doc).toBeUndefined();
   });
 
@@ -83,5 +83,17 @@ describe('FollowedPlans (PPL-3)', () => {
     await f.set([a.calendarId]);
     await f.set([]);
     expect(f.getSnapshot()).toEqual([]);
+  });
+
+  it('answers a burst of refreshes with one round of requests', async () => {
+    const storage = new MemoryStorage();
+    const a = await storage.create(plan('ana', '2027-08-16'));
+    const f = new FollowedPlans(storage);
+    await f.set([a.calendarId]);
+    let checks = 0;
+    const version = storage.version.bind(storage);
+    storage.version = (id) => (checks++, version(id));
+    await Promise.all(Array.from({ length: 100 }, () => f.refresh()));
+    expect(checks).toBe(1);
   });
 });

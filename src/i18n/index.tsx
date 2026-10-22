@@ -35,7 +35,8 @@ export function I18nProvider({ lang, setLang, children }: { lang: Lang; setLang:
       setLang,
       t: (key, params) => dict[key].replace(/\{(\w+)\}/g, (_, p: string) => String(params?.[p] ?? `{${p}}`)),
       plural: (key, n) => pluralize(lang, key, n),
-      name: (names) => displayName(String(names[lang] ?? '')),
+      // A record without names (a damaged or hand-made file) shows nothing rather than breaking the page.
+      name: (names) => displayName(String((names as Names | undefined)?.[lang] ?? '')),
       date: (date, options) => {
         const key = JSON.stringify(options);
         let f = formatters.get(key);

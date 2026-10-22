@@ -571,7 +571,8 @@ button.square {
   margin: 0;
   max-width: min(18rem, calc(100vw - 16px));
   max-height: calc(100vh - 16px);
-  overflow: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 0.4rem 0.6rem;
   border: 0;
   border-radius: 8px;

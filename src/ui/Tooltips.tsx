@@ -28,7 +28,9 @@ export function Tooltips() {
     const isOpen = () => (topLayer ? el.matches(':popover-open') : el.classList.contains('open'));
 
     const place = (t: HTMLElement) => {
-      el.textContent = t.dataset.tip ?? '';
+      // Its text gone (a followed plan reloaded): no empty bubble.
+      if (!t.dataset.tip) return hide(0);
+      el.textContent = t.dataset.tip;
       if (!isOpen()) {
         if (topLayer) el.showPopover();
         else el.classList.add('open');
@@ -99,7 +101,8 @@ export function Tooltips() {
       e.stopPropagation();
       hide(0);
     };
-    const onScroll = () => hide(0);
+    // The page scrolling moves what the tooltip points at; the tooltip's own scrolling doesn't.
+    const onScroll = (e: Event) => e.target !== el && hide(0);
 
     document.addEventListener('pointerover', onOver);
     document.addEventListener('focusin', onFocusIn);

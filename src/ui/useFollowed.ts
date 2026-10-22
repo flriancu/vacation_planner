@@ -10,7 +10,7 @@ const NONE: readonly FollowedPlan[] = [];
  * the demo follows nobody. Only the plans the calendar draws are loaded, so a long list of
  * hidden people costs nothing.
  */
-export function useFollowed(storage: Storage, calendarIds: readonly string[]): readonly FollowedPlan[] {
+export function useFollowed(storage: Storage, calendarIds: readonly string[]): { plans: readonly FollowedPlan[]; refresh: () => void } {
   const plans = useMemo(() => (storage.kind === 'drive' ? new FollowedPlans(storage) : null), [storage]);
   const key = JSON.stringify(calendarIds);
   const snapshot = useSyncExternalStore(plans?.subscribe ?? noSubscribe, plans?.getSnapshot ?? noSnapshot);
@@ -32,7 +32,7 @@ export function useFollowed(storage: Storage, calendarIds: readonly string[]): r
     };
   }, [plans]);
 
-  return snapshot;
+  return { plans: snapshot, refresh: () => void plans?.refresh() };
 }
 
 const noSubscribe = () => () => {};

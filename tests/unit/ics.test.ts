@@ -74,6 +74,8 @@ describe('blocksForCalendar', () => {
   it('shows ideas as free time, and keeps SEQUENCE a 32-bit number for centuries', () => {
     const ics = toIcs([event({ busy: false })], 'x', NOW);
     expect(ics).toContain('TRANSP:TRANSPARENT');
-    expect(sequence('2400-01-01T00:00:00.000Z')).toBeLessThan(2 ** 31);
+    expect(sequence('2200-01-01T00:00:00.000Z')).toBeLessThan(2 ** 31);
+    // Above every SEQUENCE the first version wrote (seconds since 1970, in 2026), so no re-import looks older.
+    expect(sequence('2026-10-22T00:00:00.000Z')).toBeGreaterThan(Date.parse('2027-01-01T00:00:00.000Z') / 1000);
   });
 });

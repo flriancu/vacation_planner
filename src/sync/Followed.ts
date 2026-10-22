@@ -11,9 +11,10 @@ import { retryDelay } from './retry';
  * - `waiting`: never loaded yet, for a passing reason; tried again;
  * - `signIn`: the Google session ended; nothing is shown until I sign in again;
  * - `gone`: no longer shared with me, or deleted;
- * - `unsupported`: not a plan this version can read (another file, a newer version, too big).
+ * - `unsupported`: not a plan this version can read (another file, a newer version);
+ * - `tooBig`: far bigger than any real plan.
  */
-export type FollowedState = 'loading' | 'ready' | 'stale' | 'waiting' | 'signIn' | 'gone' | 'unsupported';
+export type FollowedState = 'loading' | 'ready' | 'stale' | 'waiting' | 'signIn' | 'gone' | 'unsupported' | 'tooBig';
 
 /** One plan I follow (PPL-3): someone else's, read-only. */
 export interface FollowedPlan {
@@ -30,7 +31,7 @@ export interface FollowedPlan {
  * A plan with more records than this is not drawn: real plans have a few hundred, and a
  * larger one (a broken or hostile file) would make every redraw of my calendar slow.
  */
-export const MAX_FOLLOWED_RECORDS = 5000;
+export const MAX_FOLLOWED_RECORDS = 2000;
 
 /**
  * The plans I follow, read-only: each loaded on its own, so one that can't be read never
@@ -68,8 +69,15 @@ export class FollowedPlans {
     await Promise.all(this.ids.filter((id) => !this.plans.has(id)).map((id) => this.load(id)));
   }
 
-  /** Reloads the plans that changed since they were read, and retries the ones that failed. */
-  refresh = () =>
+  private refreshing: Promise<unknown> | null = null;
+
+  /**
+   * Reloads the plans that changed since they were read, and retries the ones that failed (also
+   * after signing in again). Calls while one runs share it: a burst of events costs one round.
+   */
+  refresh = (): Promise<unknown> => (this.refreshing ??= this.refreshAll().finally(() => (this.refreshing = null)));
+
+  private refreshAll = () =>
     Promise.all(
       this.ids.map(async (id) => {
         const plan = this.plans.get(id);
@@ -101,7 +109,8 @@ export class FollowedPlans {
     try {
       const { doc, version } = await this.storage.load(id);
       if (!this.ids.includes(id)) return; // unfollowed meanwhile
-      if (records(doc) > MAX_FOLLOWED_RECORDS) throw new UnsupportedPlanError(`The plan has more than ${MAX_FOLLOWED_RECORDS} records`);
+      if (records(doc) > MAX_FOLLOWED_RECORDS)
+        throw new UnsupportedPlanError(`The plan has more than ${MAX_FOLLOWED_RECORDS} records`, 'tooBig');
       this.plans.set(id, { calendarId: id, state: 'ready', doc, version, loadedAt: this.now() });
       this.emit();
     } catch (e) {
@@ -120,7 +129,9 @@ export class FollowedPlans {
           ? 'stale'
           : 'waiting'
         : e instanceof UnsupportedPlanError
-          ? 'unsupported'
+          ? e.reason === 'tooBig'
+            ? 'tooBig'
+            : 'unsupported'
           : 'gone';
     const keep = state === 'stale' ? { doc: before!.doc, loadedAt: before!.loadedAt } : {};
     const attempt = passing ? (before?.attempt ?? -1) + 1 : undefined;
@@ -138,6 +149,7 @@ export class FollowedPlans {
   }
 }
 
+/** What is drawn from a plan: its live records (deletions cost nothing). */
 function records(doc: PlanDoc): number {
-  return Object.keys(doc.blocks).length + Object.keys(doc.people).length + Object.keys(doc.leaveTypes).length + live(doc.following).length;
+  return live(doc.blocks).length + live(doc.people).length + live(doc.leaveTypes).length + live(doc.following).length;
 }

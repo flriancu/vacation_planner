@@ -106,16 +106,18 @@ export const byRange = (a: Block, b: Block) => a.start.localeCompare(b.start) ||
 /**
  * Each block's nesting level (0 = outermost), the same on every day it covers, so its outline
  * steps in by the same amount everywhere and stays one closed shape (CAL-6). In `byRange`
- * order, each block takes the lowest level that no block overlapping it has taken: an
- * enclosing block is outer, and two blocks that only partly overlap keep their levels from
- * one day to the next instead of swapping places where one of them begins.
+ * order, each block takes the lowest level that no block overlapping it has taken and that is
+ * deeper than every block enclosing it: an enclosing block is always outside, and two blocks
+ * that only partly overlap keep their levels from one day to the next. Give it all of one
+ * person's blocks, not only those in view, so every year view draws them alike.
  */
 export function nestLevels(blocks: readonly Block[]): Map<string, number> {
   const levels = new Map<string, number>();
   const placed: Block[] = [];
   for (const b of [...blocks].sort(byRange)) {
-    const taken = new Set(placed.filter((p) => overlaps(p.start, p.end, b.start, b.end)).map((p) => levels.get(p.id)));
-    let level = 0;
+    const around = placed.filter((p) => overlaps(p.start, p.end, b.start, b.end));
+    const taken = new Set(around.map((p) => levels.get(p.id)));
+    let level = Math.max(-1, ...around.filter((p) => p.start <= b.start && p.end >= b.end).map((p) => levels.get(p.id)!)) + 1;
     while (taken.has(level)) level++;
     levels.set(b.id, level);
     placed.push(b);

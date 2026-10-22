@@ -50,7 +50,7 @@ export function toIcs(events: readonly IcsEvent[], calendarName: string, now: Da
       `UID:${text(e.uid)}`,
       `DTSTAMP:${stamp(now.toISOString())}`,
       `LAST-MODIFIED:${stamp(e.updatedAt)}`,
-      `SEQUENCE:${Math.max(0, Math.floor(Date.parse(e.updatedAt) / 60_000) || 0)}`,
+      `SEQUENCE:${sequence(e.updatedAt)}`,
       `DTSTART;VALUE=DATE:${day(e.start)}`,
       `DTEND;VALUE=DATE:${day(addDays(e.end, 1))}`,
       `SUMMARY:${text(e.summary)}`,
@@ -65,6 +65,17 @@ export function toIcs(events: readonly IcsEvent[], calendarName: string, now: Da
 }
 
 const day = (d: ISODate) => d.replaceAll('-', '');
+
+/**
+ * SEQUENCE: rises with every change, so a calendar app takes a re-import as an update. Minutes
+ * since 1970 plus 2 000 000 000: always above the seconds the first version wrote (about 1.76
+ * billion in 2026; a lower one would be ignored), and within the 32-bit number apps keep until
+ * the 23rd century, where seconds would run out in 2038.
+ */
+function sequence(updatedAt: Stamp): number {
+  const t = Date.parse(updatedAt);
+  return Number.isFinite(t) && t > 0 ? 2_000_000_000 + Math.floor(t / 60_000) : 0;
+}
 
 /** `2027-03-01T10:00:00.000Z` → `20270301T100000Z`; a stamp that isn't one becomes the epoch. */
 function stamp(s: Stamp): string {

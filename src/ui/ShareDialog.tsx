@@ -10,12 +10,12 @@ const MAX_EMAIL = 254;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** What went wrong while sharing, in the user's words. Nothing here retries by itself, so none says so. */
-function shareError(e: unknown): MessageKey {
+function shareError(e: unknown, stopping = false): MessageKey {
   if (needsSignIn(e)) return 'err.auth';
   if (isRetryable(e)) return 'share.errLater';
   const status = (e as { status?: unknown } | null)?.status;
-  if (status === 400) return 'share.errAddress';
-  if (status === 403) return 'share.errRefused';
+  if (status === 400 && !stopping) return 'share.errAddress';
+  if (status === 403) return stopping ? 'share.errStopRefused' : 'share.errRefused';
   return 'share.errLater';
 }
 
@@ -84,7 +84,13 @@ export function ShareDialog({
     setBusy(true);
     sharing
       .unshare(calendarId, s.id)
-      .then(reload, (err: unknown) => setNote({ key: shareError(err) }))
+      .then(
+        () => {
+          setNote(null); // "Done: x can see your plan" would no longer be true
+          return reload();
+        },
+        (err: unknown) => setNote({ key: shareError(err, true) }),
+      )
       .finally(() => setBusy(false));
   };
 
@@ -113,7 +119,8 @@ export function ShareDialog({
             value={email}
             onChange={(e) => {
               setEmail(e.target.value);
-              if (note?.key === 'share.done' || note?.key === 'share.invalid') setNote(null);
+              // A note about the last address doesn't stay next to a new one.
+              if (note && note.key !== 'err.auth') setNote(null);
             }}
           />
         </label>

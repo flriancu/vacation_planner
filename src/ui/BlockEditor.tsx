@@ -143,12 +143,21 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
       : [];
 
   // Who I follow is off on some of these days, and how sure their least sure day is.
+  // Who I follow is off on some of these days, counted by status ("4 zile aprobat, 1 zi idee"),
+  // and whose plan can't be read, so nobody is left out without a word.
   const othersOff = valid
     ? others.flatMap((o) => {
-        const days = daysBetween(draft.start, draft.end).flatMap((d) => o.days.get(d) ?? []);
-        if (days.length === 0) return [];
-        const status = days.reduce((low, d) => (STATUS_RANK[d.status] < STATUS_RANK[low] ? d.status : low), days[0]!.status);
-        return [{ id: o.id, name: o.name, days: days.length, status }];
+        if (o.unknown) return [{ id: o.id, text: t('editor.otherUnknown', { name: o.name }) }];
+        const counts = new Map<BlockStatus, number>();
+        for (const d of daysBetween(draft.start, draft.end)) {
+          const day = o.days.get(d);
+          if (day) counts.set(day.status, (counts.get(day.status) ?? 0) + 1);
+        }
+        if (counts.size === 0) return [];
+        const parts = (['approved', 'planned', 'idea'] as const)
+          .filter((s) => counts.has(s))
+          .map((s) => `${plural('days', counts.get(s)!)} ${lower(t(`status.${s}`))}`);
+        return [{ id: o.id, text: t('editor.otherOff', { name: o.name, days: parts.join(', ') }) }];
       })
     : [];
 
@@ -307,9 +316,7 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
             {t('editor.othersOff')}
             <ul>
               {othersOff.map((o) => (
-                <li key={o.id}>
-                  {t('editor.otherOff', { name: o.name, days: plural('days', o.days), status: lower(t(`status.${o.status}`)) })}
-                </li>
+                <li key={o.id}>{o.text}</li>
               ))}
             </ul>
           </div>

@@ -296,4 +296,15 @@ describe('plan copies, after re-verification (IO-4)', () => {
     const demo = newPlanDoc({ googleSub: 'demo', personName: 'Me' }, otherContext());
     expect(planCopy(mine.doc, readBackup(toBackup(demo.doc)), mine.personId).from).toBeUndefined();
   });
+
+  it('plans a copy of thousands of leaves in a moment', () => {
+    const mine = new DocBuilder();
+    const copy = copyWith(
+      'someone-else',
+      Array.from({ length: 4000 }, (_, i) => ({ start: `2027-0${(i % 9) + 1}-1${i % 10}`, status: 'idea' as const })),
+    );
+    const started = performance.now();
+    planCopy(mine.doc, copy, mine.personId);
+    expect(performance.now() - started).toBeLessThan(2000);
+  });
 });

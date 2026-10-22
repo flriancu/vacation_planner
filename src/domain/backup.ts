@@ -1,5 +1,5 @@
-import { findOverlaps, fullOfIdeas } from './calendar';
-import { yearOf } from './dates';
+import { MAX_IDEAS_PER_DAY } from './calendar';
+import { daysBetween, overlaps, yearOf } from './dates';
 import { FIRST_YEAR, LAST_YEAR } from './holidays';
 import { migrate, toFile, UnsupportedPlanError } from './migrate';
 import { ownPerson } from './people';
@@ -116,11 +116,26 @@ export function planCopy(mine: PlanDoc, copy: PlanDoc, personId: string): CopyPl
     return id;
   };
 
-  // The rules are checked against my plan as it would be with every block accepted so far.
-  let trial: PlanDoc = { ...mine, leaveTypes: { ...mine.leaveTypes } };
+  // The editor's rules (BLK-5), checked against my leave and the leave accepted so far. Kept as
+  // running lists, not a copy of the plan per block: a copy of thousands stays quick.
+  const leaveTypes = { ...mine.leaveTypes };
+  const closed = (x: Block) => leaveTypes[x.typeId]?.key === 'closed';
+  const minePerson = live(mine.blocks).filter((x) => x.personId === personId);
+  const firm = minePerson.filter((x) => x.status !== 'idea' && !closed(x));
+  const ideas = minePerson.filter((x) => x.status === 'idea');
+  // One swap day per holiday: the holidays my planned or approved swap days already make up for.
+  const swapped = new Set(minePerson.filter((x) => x.status !== 'idea' && x.swapFor).map((x) => x.swapFor!));
+  const crowded = (x: Block) => {
+    const near = ideas.filter((i) => overlaps(i.start, i.end, x.start, x.end));
+    return (
+      near.length >= MAX_IDEAS_PER_DAY &&
+      daysBetween(x.start, x.end).some((d) => near.filter((i) => i.start <= d && d <= i.end).length >= MAX_IDEAS_PER_DAY)
+    );
+  };
+
   const years = new Set<number>();
   const surest = live(copy.blocks).sort(
-    (a, b) => STATUS_RANK[b.status] - STATUS_RANK[a.status] || a.start.localeCompare(b.start) || a.id.localeCompare(b.id),
+    (x, y) => STATUS_RANK[y.status] - STATUS_RANK[x.status] || x.start.localeCompare(y.start) || x.id.localeCompare(y.id),
   );
   for (const b of surest) {
     if (b.personId !== them || yearOf(b.start) < FIRST_YEAR || yearOf(b.end) > LAST_YEAR) {
@@ -136,7 +151,7 @@ export function planCopy(mine: PlanDoc, copy: PlanDoc, personId: string): CopyPl
       plan.skipped.other++;
       continue;
     }
-    for (const t of plan.types) if (!has(trial.leaveTypes, t.id)) put(trial.leaveTypes, t.id, t);
+    for (const t of plan.types) if (!has(leaveTypes, t.id)) put(leaveTypes, t.id, t);
     // Known fields only: whatever else a copy carries stays behind.
     const block: Block = {
       id: b.id,
@@ -150,21 +165,22 @@ export function planCopy(mine: PlanDoc, copy: PlanDoc, personId: string): CopyPl
       ...(b.note && { note: b.note }),
       ...(b.swapFor && { swapFor: b.swapFor }),
     };
-    const next = { ...trial, blocks: withRecord(trial.blocks, block.id, block) };
-    const overlap = block.status !== 'idea' && findOverlaps(next, personId).some(([x, y]) => x.id === block.id || y.id === block.id);
-    const crowded = block.status === 'idea' && fullOfIdeas(trial, personId, block.start, block.end).length > 0;
-    // A swap day must be one working day next to its weekend's holiday (BLK-5), as in the editor.
-    const swapFor = trial.leaveTypes[typeId]?.key === 'swap' ? swapHolidaysFor(trial, block.start) : undefined;
-    const misplacedSwap =
-      !!swapFor &&
-      (block.start !== block.end ||
-        swapFor.length === 0 ||
-        (block.swapFor !== undefined && !swapFor.some((h) => h.date === block.swapFor)));
-    if (overlap || crowded || misplacedSwap) {
+    const overlap = block.status !== 'idea' && !closed(block) && firm.some((f) => overlaps(f.start, f.end, block.start, block.end));
+    // A swap day: one working day next to a weekend with a holiday, for a holiday no other swap day takes.
+    let swapOk = true;
+    if (leaveTypes[typeId]?.key === 'swap') {
+      const holidays = block.start === block.end ? swapHolidaysFor(mine, block.start).map((h) => h.date) : [];
+      const forDay = block.swapFor ?? holidays.find((h) => block.status === 'idea' || !swapped.has(h));
+      swapOk = !!forDay && holidays.includes(forDay) && (block.status === 'idea' || !swapped.has(forDay));
+      if (swapOk && forDay) block.swapFor = forDay;
+    }
+    if (overlap || (block.status === 'idea' && crowded(block)) || !swapOk) {
       plan.skipped.conflicts++;
       continue;
     }
-    trial = next;
+    if (block.status === 'idea') ideas.push(block);
+    else if (!closed(block)) firm.push(block);
+    if (block.status !== 'idea' && block.swapFor) swapped.add(block.swapFor);
     plan.blocks.push(block);
     plan.byStatus[block.status]++;
     for (let y = yearOf(block.start); y <= yearOf(block.end); y++) years.add(y);
@@ -189,11 +205,4 @@ export function addCopy(mine: PlanDoc, plan: CopyPlan, now: Stamp): PlanDoc {
   const blocks = { ...mine.blocks };
   for (const b of plan.blocks) if (!has(blocks, b.id)) put(blocks, b.id, { ...b, createdAt: at(b.createdAt), updatedAt: at(b.updatedAt) });
   return { ...mine, leaveTypes, blocks };
-}
-
-/** A copy of `records` with one more, safe for any id (`put`). */
-function withRecord<T>(records: Record<string, T>, id: string, record: T): Record<string, T> {
-  const out = { ...records };
-  put(out, id, record);
-  return out;
 }

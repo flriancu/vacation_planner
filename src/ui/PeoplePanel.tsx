@@ -18,15 +18,15 @@ interface Props {
   people: readonly PersonRow[];
   onToggle: (follow: Follow) => void;
   onMove: (follow: Follow, by: -1 | 1) => void;
-  onUnfollow: (follow: Follow) => void;
+  onUnfollow: (follow: Follow, name: string) => void;
   onFollow: () => void;
   /** A message after picking a plan (my own, already followed, or the picker failed). */
   note: PeopleNote | null;
   /** Offered when the Google session ended. */
   onSignIn?: () => void;
+  /** Some plan drawn hasn't loaded or can't be read, so "everyone off" isn't shown yet. */
+  waiting?: boolean;
 }
-
-const time = (ms: number) => new Date(ms).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 
 const STATE_TEXT: Partial<Record<PersonRow['state'], MessageKey>> = {
   loading: 'people.loading',
@@ -34,6 +34,7 @@ const STATE_TEXT: Partial<Record<PersonRow['state'], MessageKey>> = {
   signIn: 'people.signIn',
   gone: 'people.gone',
   unsupported: 'people.unsupported',
+  tooBig: 'people.tooBig',
   own: 'people.ownCopy',
 };
 
@@ -42,8 +43,16 @@ const STATE_TEXT: Partial<Record<PersonRow['state'], MessageKey>> = {
  * the order the lines keep, and why a plan isn't drawn. Lines are told apart by place, not
  * colour, so the place is written next to each name.
  */
-export function PeoplePanel({ people, onToggle, onMove, onUnfollow, onFollow, note, onSignIn }: Props) {
-  const { t } = useI18n();
+export function PeoplePanel({ people, onToggle, onMove, onUnfollow, onFollow, note, onSignIn, waiting }: Props) {
+  const { t, lang } = useI18n();
+  /** When what is shown was read: the day and the time, in the app's language. */
+  const when = (ms: number) =>
+    new Intl.DateTimeFormat(lang === 'ro' ? 'ro-RO' : 'en-GB', {
+      day: 'numeric',
+      month: 'long',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(ms);
   let line = 0;
   const signInNeeded = people.some((p) => p.state === 'signIn') || note?.reason === 'err.auth';
   return (
@@ -53,13 +62,16 @@ export function PeoplePanel({ people, onToggle, onMove, onUnfollow, onFollow, no
       ) : (
         <ul>
           {people.map((p, i) => {
-            if (!p.follow.hidden) line++;
+            // A copy of my own plan takes no line.
+            if (!p.follow.hidden && p.state !== 'own') line++;
             const place =
               p.state === 'hidden'
                 ? t('people.hidden')
                 : p.state === 'tooMany'
                   ? t('people.tooMany', { max: MAX_PEOPLE })
-                  : t('people.line', { n: line });
+                  : p.state === 'own'
+                    ? ''
+                    : t('people.line', { n: line });
             const stateKey = STATE_TEXT[p.state];
             // Moves step over hidden people (domain/people.ts movedOrder), so only a shown neighbour counts.
             const shownBefore = people.slice(0, i).some((q) => !q.follow.hidden);
@@ -71,9 +83,13 @@ export function PeoplePanel({ people, onToggle, onMove, onUnfollow, onFollow, no
                   <span className="person-name">
                     {p.name}
                     <span className="person-state">
-                      {place}
-                      {stateKey && ` · ${t(stateKey)}`}
-                      {p.state === 'stale' && p.loadedAt !== undefined && ` · ${t('people.stale', { time: time(p.loadedAt) })}`}
+                      {[
+                        place,
+                        stateKey && t(stateKey),
+                        p.state === 'stale' && p.loadedAt !== undefined && t('people.stale', { time: when(p.loadedAt) }),
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
                     </span>
                   </span>
                 </label>
@@ -101,7 +117,7 @@ export function PeoplePanel({ people, onToggle, onMove, onUnfollow, onFollow, no
                   <button
                     type="button"
                     className="square"
-                    onClick={() => onUnfollow(p.follow)}
+                    onClick={() => onUnfollow(p.follow, p.name)}
                     aria-label={t('people.remove', { name: p.name })}
                     data-tip={t('people.remove', { name: p.name })}
                   >
@@ -128,6 +144,7 @@ export function PeoplePanel({ people, onToggle, onMove, onUnfollow, onFollow, no
           </li>
         </ul>
       )}
+      {waiting && <p className="people-note">{t('people.togetherWaiting')}</p>}
       <button type="button" className="link" onClick={onFollow}>
         {t('people.follow')}
       </button>

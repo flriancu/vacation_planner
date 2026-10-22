@@ -26,6 +26,8 @@ export interface OtherPerson {
   days: ReadonlyMap<ISODate, LeaveDay>;
   /** Their leave type's name in my language (their plan has its own types). */
   typeName: (day: LeaveDay) => string;
+  /** Their plan can't be read (yet): nothing is known about their days. */
+  unknown?: boolean;
 }
 
 interface Props {
@@ -105,11 +107,8 @@ export function Calendar({ year, doc, personId, today, others = [], together, on
     }
     return out;
   }, [doc, personId, days, from, to, i18n]);
-  // Each block's outline level, the same on every day it covers (calendarModel.nestLevels).
-  const levels = useMemo(
-    () => nestLevels(live(doc.blocks).filter((b) => b.personId === personId && overlaps(b.start, b.end, from, to))),
-    [doc, personId, from, to],
-  );
+  // Each block's outline level, the same on every day it covers and in every year's view (calendarModel.nestLevels).
+  const levels = useMemo(() => nestLevels(live(doc.blocks).filter((b) => b.personId === personId)), [doc, personId]);
 
   /** "3 – 7 august", "28 decembrie – 7 ianuarie", or one day: which block a line is about when several cover a day. */
   const span = (b: Block) => {
@@ -395,7 +394,11 @@ export function Calendar({ year, doc, personId, today, others = [], together, on
                   {together?.has(d) && <span className={`together st-${together.get(d)}`} aria-hidden="true" />}
                   {others.length > 0 && (
                     // Each person's line has its own slot, the same on every day, empty or not (PPL-4).
-                    <span className="lines" style={{ '--n': Math.min(others.length, MAX_PEOPLE) } as CSSProperties} aria-hidden="true">
+                    <span
+                      className={`lines${others.length >= 3 ? ' dense' : ''}`}
+                      style={{ '--n': Math.min(others.length, MAX_PEOPLE) } as CSSProperties}
+                      aria-hidden="true"
+                    >
                       {others.slice(0, MAX_PEOPLE).map((o, k) => {
                         const day = o.days.get(d);
                         return (
@@ -424,6 +427,9 @@ export function Calendar({ year, doc, personId, today, others = [], together, on
                       </span>
                     );
                   })}
+                  {/* Month separators (CAL-3) above the outlines, so a block's edge never hides them. */}
+                  {me.top && <span className="month-edge top" aria-hidden="true" />}
+                  {me.left && <span className="month-edge left" aria-hidden="true" />}
                 </div>
               );
             })}

@@ -84,7 +84,7 @@ export interface PickerOptions {
  */
 export async function pickSharedPlan({ token, apiKey, appId, locale, title }: PickerOptions): Promise<{ id: string; name: string } | null> {
   const picker = await loadPicker();
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const view = new picker.DocsView(picker.ViewId.DOCS)
       .setOwnedByMe(false)
       .setIncludeFolders(false)
@@ -98,8 +98,11 @@ export async function pickSharedPlan({ token, apiKey, appId, locale, title }: Pi
       .setLocale(locale)
       .setTitle(title)
       .setCallback((result) => {
+        // "loaded" comes first, when it shows; "picked" or "cancel" end it; anything else is a failure.
         if (result.action === picker.Action.PICKED && result.docs?.[0]) resolve({ id: result.docs[0].id, name: result.docs[0].name ?? '' });
         else if (result.action === picker.Action.CANCEL) resolve(null);
+        else if (result.action === 'error' || (result.action === picker.Action.PICKED && !result.docs?.[0]))
+          reject(new PickerLoadError(`The picker answered "${result.action}"`));
       })
       .build()
       .setVisible(true);

@@ -8,11 +8,11 @@ export function ownPerson(doc: PlanDoc): string | undefined {
 }
 
 /** A Drive file id: letters, digits, "-" and "_" (anything else could only come from a hand-made file). */
-const FILE_ID = /^[\w-]{1,200}$/;
+export const isFileId = (id: string) => /^[\w-]{1,200}$/.test(id);
 
 /**
- * The plans I follow (PPL-3), in their fixed order (PPL-4): the order I set, else the order I
- * started following them. Hidden ones included; the caller skips them where it draws.
+ * The plans I follow (PPL-3), in their fixed order (PPL-4): the place I gave each, else the
+ * order I started following them. Hidden ones included; the caller skips them where it draws.
  * Each file once (two devices, or two quick clicks, may each have followed it), never my own
  * plan (`ownFileId`; a copy of someone's plan may name it), and only real file ids.
  */
@@ -21,16 +21,19 @@ export function followed(doc: PlanDoc, ownFileId?: string): Follow[] {
   return live(doc.following)
     .sort(byPlace)
     .filter((f) => {
-      if (!FILE_ID.test(f.driveFileId) || f.driveFileId === ownFileId || seen.has(f.driveFileId)) return false;
+      if (!isFileId(f.driveFileId) || f.driveFileId === ownFileId || seen.has(f.driveFileId)) return false;
       seen.add(f.driveFileId);
       return true;
     });
 }
 
-const byPlace = (a: Follow, b: Follow) =>
-  (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER) ||
-  a.createdAt.localeCompare(b.createdAt) ||
-  a.id.localeCompare(b.id);
+/**
+ * A followed plan's place in the list: the place I gave it (small numbers), else when I started
+ * following it, in seconds (far larger, so after every place I gave). The same number sorts the
+ * list and places a move, so a move always lands where it says.
+ */
+export const placeOf = (f: Follow) => f.order ?? Date.parse(f.createdAt) / 1000;
+const byPlace = (a: Follow, b: Follow) => placeOf(a) - placeOf(b) || a.id.localeCompare(b.id);
 
 /**
  * The new `order` for one followed plan moved one place up (-1) or down (+1) among the shown
@@ -39,20 +42,19 @@ const byPlace = (a: Follow, b: Follow) =>
  * a move always changes what the calendar shows.
  */
 export function movedOrder(list: readonly Follow[], id: string, by: -1 | 1): number | undefined {
-  // Places as numbers: the stored order, else one after the one before, so unset ones keep their place.
-  const places: number[] = [];
-  list.forEach((f, i) => places.push(f.order ?? (i ? places[i - 1]! + 1 : 1)));
+  const places = list.map(placeOf);
   const i = list.findIndex((f) => f.id === id);
   if (i < 0) return undefined;
-  const shown = list.map((f, k) => k).filter((k) => !list[k]!.hidden || k === i);
-  const at = shown.indexOf(i);
-  const target = shown[at + by];
+  const shown = list.map((_, k) => k).filter((k) => !list[k]!.hidden || k === i);
+  const target = shown[shown.indexOf(i) + by];
   if (target === undefined) return undefined;
-  // Just past the neighbour, halfway to the one beyond it.
-  const beyond = by < 0 ? (target > 0 ? places[target - 1] : undefined) : target < list.length - 1 ? places[target + 1] : undefined;
+  // Just past the neighbour: halfway to the one beyond it, or one further at the end.
   const edge = places[target]!;
+  const beyond = places[target + by];
   if (beyond === undefined) return edge + by;
-  return beyond === edge ? edge + by / 2 : (edge + beyond) / 2;
+  if (beyond === edge) return edge + by * Math.max(Math.abs(edge) * 1e-12, 1e-9); // two at one place: past both
+  const middle = (edge + beyond) / 2;
+  return middle === edge || middle === beyond ? undefined : middle;
 }
 
 /** One day of someone's leave, for drawing their line: which block, and whether it begins or ends that day. */
@@ -76,13 +78,13 @@ function days(doc: PlanDoc, personId: string, from: ISODate, to: ISODate) {
 }
 
 /**
- * The block that stands for someone's day on their line: the surest one (approved over planned
- * over idea), and leave over an office closure inside it, so a line keeps one look across a
- * closed day in the middle of approved leave.
+ * The block that stands for someone's day on their line: their leave over an office closure
+ * inside it (whatever either's status), so a line keeps its leave's look across a closed day;
+ * then the surest (approved over planned over idea).
  */
 function lineBlock(doc: PlanDoc, blocks: readonly Block[]): Block | undefined {
-  const closed = (b: Block) => (doc.leaveTypes[b.typeId]?.key === 'closed' ? 0 : 1);
-  const better = (a: Block, b: Block) => STATUS_RANK[a.status] - STATUS_RANK[b.status] || closed(a) - closed(b);
+  const leave = (b: Block) => (doc.leaveTypes[b.typeId]?.key === 'closed' ? 0 : 1);
+  const better = (a: Block, b: Block) => leave(a) - leave(b) || STATUS_RANK[a.status] - STATUS_RANK[b.status];
   let best: Block | undefined;
   for (const b of blocks) if (!best || better(b, best) > 0) best = b;
   return best;
@@ -100,7 +102,7 @@ export function leaveDays(doc: PlanDoc, personId: string, from: ISODate, to: ISO
 }
 
 /** How far around the view stretches are followed, so a day says the same in every view that shows it. */
-const STRETCH_PAD = 62;
+const STRETCH_PAD = 400;
 
 /**
  * Days when everyone in `plans` is off together (PPL-4): each of them has the day off anyway or
@@ -138,11 +140,10 @@ export function offTogether(
     for (const { doc, day } of each) {
       if (day.base !== 'work') continue;
       leave = true;
-      const firm = lineBlock(
-        doc,
-        day.blocks.filter((b) => b.status !== 'idea'),
+      // Sure when any reason for the day off is: approved leave, or what needs no approval (the office's closure).
+      const settled = day.blocks.some(
+        (b) => b.status === 'approved' || (b.status === 'planned' && doc.leaveTypes[b.typeId]?.needsApproval === false),
       );
-      const settled = firm && (firm.status === 'approved' || doc.leaveTypes[firm.typeId]?.needsApproval === false);
       if (!settled) sure = false;
     }
   }

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { nextStamp } from '../../src/domain/clock';
 import { updateRecord } from '../../src/domain/edit';
 import { followed, leaveDays, movedOrder, offTogether, ownPerson } from '../../src/domain/people';
+import type { PlanDoc } from '../../src/domain/schema';
 import { DocBuilder } from '../fixtures/builder';
 
 /** Me, and Ana whose plan I follow; made-up August 2027 leave. */
@@ -144,5 +146,59 @@ describe("what a followed person's line says (PPL-4)", () => {
     const in2027 = offTogether(plans, '2026-12-14', '2028-01-16');
     const in2028 = offTogether(plans, '2027-12-13', '2029-01-14');
     for (const d of ['2027-12-22', '2028-01-05', '2028-01-12']) expect(in2027.get(d)).toBe(in2028.get(d));
+  });
+});
+
+/** Follows as an older version saved them: no place given, followed one after another. */
+function unplaced(n: number) {
+  const me = new DocBuilder();
+  const ids = Array.from({ length: n }, (_, i) => me.add('following', { driveFileId: `f${i}`, label: String.fromCharCode(65 + i) }).id);
+  return { me, ids };
+}
+const order = (doc: PlanDoc) =>
+  followed(doc)
+    .map((f) => f.label)
+    .join('');
+const move = (doc: PlanDoc, id: string, by: -1 | 1) => {
+  const o = movedOrder(followed(doc), id, by);
+  return o === undefined ? doc : updateRecord(doc, 'following', id, { order: o }, nextStamp(doc));
+};
+
+describe('places in the list, after re-verification (PPL-4)', () => {
+  it('moves people who were never given a place one step at a time', () => {
+    const { me, ids } = unplaced(4);
+    expect(order(me.doc)).toBe('ABCD');
+    expect(order(move(me.doc, ids[0]!, 1))).toBe('BACD');
+    expect(order(move(me.doc, ids[3]!, -1))).toBe('ABDC');
+    expect(order(move(me.doc, ids[1]!, 1))).toBe('ACBD');
+  });
+
+  it('puts a plan followed again after the others', () => {
+    const { me } = unplaced(3);
+    const again = me.add('following', { driveFileId: 'again', label: 'Z' });
+    expect(followed(me.doc).at(-1)!.id).toBe(again.id);
+  });
+});
+
+describe('lines and "everyone off" with closures, after re-verification (PPL-4)', () => {
+  it("keeps a person's line in their leave's look across an approved closure", () => {
+    const ana = new DocBuilder();
+    ana.block('annual', '2027-03-08', '2027-03-12', 'planned');
+    ana.block('closed', '2027-03-10', '2027-03-10', 'approved');
+    const days = leaveDays(ana.doc, ana.personId, '2027-03-01', '2027-03-31');
+    expect(days.get('2027-03-10')!.status).toBe('planned');
+  });
+
+  it('counts a day as sure when any reason for it is (a closure under planned leave)', () => {
+    const me = new DocBuilder();
+    me.block('annual', '2027-03-10', '2027-03-10', 'planned');
+    me.block('closed', '2027-03-10', '2027-03-10', 'planned');
+    const ana = new DocBuilder();
+    ana.block('annual', '2027-03-10', '2027-03-10', 'approved');
+    const plans = [
+      { doc: me.doc, personId: me.personId },
+      { doc: ana.doc, personId: ana.personId },
+    ];
+    expect(offTogether(plans, '2027-03-01', '2027-03-31').get('2027-03-10')).toBe('approved');
   });
 });

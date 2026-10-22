@@ -75,6 +75,16 @@ describe('nestLevels (CAL-6)', () => {
     expect(levels.get('idea')).toBe(1); // also on 15–17, where the leave has ended
   });
 
+  it('draws a block that lies inside another inside it, whatever came before', () => {
+    // An idea 4–13 Jan, leave 8–29 Jan, an idea 18–20 Jan inside the leave.
+    const levels = nestLevels([
+      block('a', '2027-01-04', '2027-01-13'),
+      block('leave', '2027-01-08', '2027-01-29'),
+      block('in', '2027-01-18', '2027-01-20'),
+    ]);
+    expect(levels.get('in')!).toBeGreaterThan(levels.get('leave')!);
+  });
+
   it('reuses a level once the block holding it has ended', () => {
     const levels = nestLevels([
       block('a', '2027-03-01', '2027-03-31'),
