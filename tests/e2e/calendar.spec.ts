@@ -157,6 +157,34 @@ test('the leave type list works from the keyboard, and Escape closes only the li
   await expect(field).toHaveText('Concediu de odihnă');
 });
 
+test('typing a name with Shift, or a letter then Space, chooses what it says', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'needs a keyboard');
+  await selectRange(page, isMobile, '2027-08-10', '2027-08-12');
+  const dialog = page.getByRole('dialog', { name: 'Concediu nou' });
+  const field = dialog.getByRole('combobox', { name: 'Tip' });
+  await field.focus();
+  await page.keyboard.press('Shift+Z');
+  await page.keyboard.type('i ');
+  await page.keyboard.press('Shift+C');
+  await page.keyboard.press('Enter');
+  await expect(field).toHaveText('Zi compensatorie');
+  await page.waitForTimeout(600);
+  await page.keyboard.type('b');
+  await page.keyboard.press('Space');
+  await expect(field).toHaveText('Birou închis');
+});
+
+test('a double click on an option chooses it and does nothing to what the list covered', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'a mouse');
+  await selectRange(page, isMobile, '2027-08-10', '2027-08-12');
+  const dialog = page.getByRole('dialog', { name: 'Concediu nou' });
+  const field = dialog.getByRole('combobox', { name: 'Tip' });
+  await field.click();
+  await dialog.getByRole('option', { name: 'Birou închis' }).dblclick();
+  await expect(field).toHaveText('Birou închis');
+  await expect(page.locator('.dp-panel')).toHaveCount(0);
+});
+
 test('the open leave type list moves nothing, and a tap beside it closes it without acting', async ({ page, isMobile }) => {
   await selectRange(page, isMobile, '2027-08-09', '2027-08-11');
   let dialog = page.getByRole('dialog', { name: 'Concediu nou' });

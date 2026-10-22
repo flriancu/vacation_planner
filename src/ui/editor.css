@@ -217,7 +217,7 @@
   right: 0;
   left: 0;
   z-index: 5;
-  max-height: min(18rem, 50vh);
+  max-height: min(22rem, 60vh);
   margin-top: 2px;
   padding: 0.25rem;
   overflow-y: auto;
@@ -436,4 +436,9 @@
 
 .dp-panel .rdp-day.rdp-outside {
   color: var(--muted);
+}
+
+/* Names from other people's plans can be long and unbroken: they wrap, the dialog doesn't widen. */
+.also-here li {
+  overflow-wrap: anywhere;
 }

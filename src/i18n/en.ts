@@ -116,7 +116,7 @@ export const en: Record<MessageKey, string> = {
   'editor.save': 'Save',
   'editor.cancel': 'Cancel',
   'editor.delete': 'Delete',
-  'editor.othersOff': 'Also off on these days:',
+  'editor.othersOff': 'Also off on these days, of those on the calendar:',
   'editor.otherOff': '{name}: {days}',
   'editor.otherUnknown': "{name}: not known (the plan can't be read now)",
   'editor.alsoHere': 'Also on these days:',

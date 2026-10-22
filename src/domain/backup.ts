@@ -109,7 +109,7 @@ export function planCopy(mine: PlanDoc, copy: PlanDoc, personId: string): CopyPl
       if (source.key && live(mine.leaveTypes).every((x) => x.key !== source.key)) return undefined; // a built-in this version doesn't have
       id = source.id;
       for (let n = 2; takenType(id) || (id !== source.id && has(copy.leaveTypes, id)); n++) id = `${source.id}-${n}`;
-      const { id: _id, deleted: _deleted, ...fields } = source;
+      const { id: _id, ...fields } = source; // a deleted type stays deleted: its leave keeps it, my list doesn't show it
       plan.types.push({ ...fields, id } as LeaveType);
     }
     typeIds.set(sourceId, id);

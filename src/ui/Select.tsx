@@ -21,6 +21,27 @@ interface Props {
 const TYPE_AHEAD_MS = 500;
 const PAGE = 10;
 
+/** A second click this soon and this near a choice is the rest of a double click or tap. */
+const SETTLE_MS = 400;
+const SETTLE_PX = 10;
+
+/**
+ * Swallows the second click of a double click (or tap) on an option: the list has closed, so it
+ * would land on what the list was covering. A click elsewhere, even a quick one, goes through.
+ */
+function settle(x: number, y: number) {
+  const until = Date.now() + SETTLE_MS;
+  const swallow = (e: MouseEvent) => {
+    if (Date.now() > until || Math.abs(e.clientX - x) > SETTLE_PX || Math.abs(e.clientY - y) > SETTLE_PX) return;
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  for (const type of ['click', 'dblclick'] as const) document.addEventListener(type, swallow, true);
+  setTimeout(() => {
+    for (const type of ['click', 'dblclick'] as const) document.removeEventListener(type, swallow, true);
+  }, SETTLE_MS);
+}
+
 /** Lowercase, without diacritics: typing "i" finds "Învoire". */
 const fold = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 
@@ -118,15 +139,16 @@ export function Select({ label, value, options, onChange, disabled = false, miss
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.ctrlKey || e.metaKey || disabled) return;
     const from = open ? active : Math.max(current, 0);
-    // A space in the middle of a name is part of the search; otherwise it opens or chooses.
-    if (e.key.length === 1 && !e.altKey && (e.key !== ' ' || searching())) {
+    // A space in the middle of a name is part of the search, as long as some name goes on
+    // that way ("Concediu m"); otherwise it opens or chooses ("b", then Space, chooses Birou închis).
+    const spaceInName = e.key === ' ' && searching() && search(`${typed.current.text} `, from) >= 0;
+    if (e.key.length === 1 && !e.altKey && (e.key !== ' ' || spaceInName)) {
       const found = search(type(e.key), from);
       if (found >= 0) show(found);
       else if (!open) show(from);
       e.preventDefault();
       return;
     }
-    typed.current.text = '';
     const step: Record<string, () => void> = open
       ? {
           ArrowDown: () => setActive(clamp(active + 1)),
@@ -148,7 +170,9 @@ export function Select({ label, value, options, onChange, disabled = false, miss
         };
     if (open && e.key === 'Tab') choose(active); // and focus moves on
     const run = step[e.key];
+    // Shift, Caps Lock and other keys that type nothing don't end a search ("Zi C" with Shift).
     if (!run) return;
+    typed.current.text = '';
     e.preventDefault();
     run();
   };
@@ -166,7 +190,7 @@ export function Select({ label, value, options, onChange, disabled = false, miss
     <div className="select" ref={root}>
       {/* Like a <label>: a click on it puts the focus on the field. */}
       {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
-      <span id={`${id}-label`} className="select-label" onClick={() => field.current?.focus()}>
+      <span id={`${id}-label`} className="select-label" onClick={() => !disabled && field.current?.focus()}>
         {label}
       </span>
       <div
@@ -213,7 +237,10 @@ export function Select({ label, value, options, onChange, disabled = false, miss
             aria-selected={i === active}
             className={`${i === active ? 'active' : ''}${i === current ? ' current' : ''}`}
             onPointerMove={onPointerMove(i)}
-            onClick={() => choose(i)}
+            onClick={(e) => {
+              choose(i);
+              settle(e.clientX, e.clientY);
+            }}
           >
             {o.icon}
             <span className="select-option-label">{o.label}</span>

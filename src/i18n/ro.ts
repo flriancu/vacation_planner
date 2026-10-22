@@ -115,7 +115,7 @@ export const ro = {
   'editor.save': 'Salvează',
   'editor.cancel': 'Renunță',
   'editor.delete': 'Șterge',
-  'editor.othersOff': 'Tot liberi în aceste zile:',
+  'editor.othersOff': 'Tot liberi în aceste zile, dintre cei de pe calendar:',
   'editor.otherOff': '{name}: {days}',
   'editor.otherUnknown': '{name}: nu se știe (planul nu se poate citi acum)',
   'editor.alsoHere': 'Tot în aceste zile:',

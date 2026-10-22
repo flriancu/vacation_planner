@@ -307,4 +307,13 @@ describe('plan copies, after re-verification (IO-4)', () => {
     planCopy(mine.doc, copy, mine.personId);
     expect(performance.now() - started).toBeLessThan(2000);
   });
+
+  it("brings a copy's deleted leave type in deleted, names and all", () => {
+    const mine = new DocBuilder();
+    const gone = { ...custom('g', 'Curs vechi', 'Old course'), deleted: true as const };
+    const copy = copyWith('someone-else', [{ start: '2027-06-01', type: 'g' }], [gone]);
+    const out = addCopy(mine.doc, planCopy(mine.doc, copy, mine.personId), mine.ctx.now);
+    const type = out.leaveTypes[live(out.blocks)[0]!.typeId]!;
+    expect(type).toMatchObject({ deleted: true, name: { ro: 'Curs vechi', en: 'Old course' } });
+  });
 });
