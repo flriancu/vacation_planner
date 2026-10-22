@@ -53,8 +53,9 @@ export const Header = forwardRef<HTMLElement, Props>(function Header(
         <button
           type="button"
           className="square"
-          onClick={() => setYear((y) => y - 1)}
-          disabled={year <= minYear}
+          onClick={() => year > minYear && setYear((y) => y - 1)}
+          // aria-disabled, not disabled: a disabled button drops keyboard focus to the top of the page.
+          aria-disabled={year <= minYear}
           aria-label={t('year.prev')}
         >
           ‹
@@ -65,8 +66,8 @@ export const Header = forwardRef<HTMLElement, Props>(function Header(
         <button
           type="button"
           className="square"
-          onClick={() => setYear((y) => y + 1)}
-          disabled={year >= maxYear}
+          onClick={() => year < maxYear && setYear((y) => y + 1)}
+          aria-disabled={year >= maxYear}
           aria-label={t('year.next')}
         >
           ›
@@ -87,6 +88,20 @@ export const Header = forwardRef<HTMLElement, Props>(function Header(
     </header>
   );
 });
+
+const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+
+/**
+ * The avatar's letter: the first character as people see it (a whole emoji, a flag, a letter
+ * with its accent), skipping invisible ones, as a capital ("ß" gives "S", not "SS").
+ */
+function initialOf(text: string): string {
+  const visible = text.normalize('NFC').replace(/^[\s\u200B-\u200D\u2060\uFEFF]+/u, '');
+  const first = graphemes.segment(visible)[Symbol.iterator]().next().value?.segment;
+  if (!first) return '?';
+  const upper = first.toLocaleUpperCase();
+  return graphemes.segment(upper)[Symbol.iterator]().next().value?.segment ?? first;
+}
 
 function SettingsControls({ theme }: { theme: ThemeControls }) {
   const { t } = useI18n();
@@ -140,6 +155,7 @@ function SaveStatus({
 }) {
   const { t } = useI18n();
   const [reconnectFailed, setReconnectFailed] = useState<string | null>(null);
+  const [reconnecting, setReconnecting] = useState(false);
   if (account.kind === 'demo') {
     return (
       <output className="status status-demo" data-tip={t('status.demo')} aria-label={t('status.demo')}>
@@ -150,11 +166,17 @@ function SaveStatus({
     );
   }
   if (saveState === 'signin') {
-    const reconnect = () =>
-      void account.reconnect().then(async (failed) => {
-        setReconnectFailed(failed);
-        if (!failed) await flush();
-      });
+    const reconnect = () => {
+      if (reconnecting) return; // one Google popup at a time
+      setReconnecting(true);
+      void account
+        .reconnect()
+        .then(async (failed) => {
+          setReconnectFailed(failed);
+          if (!failed) await flush();
+        })
+        .finally(() => setReconnecting(false));
+    };
     const why =
       reconnectFailed && t(reconnectFailed === 'other_account' ? 'auth.errOtherAccount' : 'auth.reconnectFailed', { email: account.email });
     return (
@@ -213,8 +235,7 @@ function AccountSlot({ account, settings, compact }: { account: Account; setting
       </>
     );
   }
-  // The first character, not the first UTF-16 unit: an emoji or an accented capital stays whole.
-  const initial = Array.from((account.name || account.email).trim())[0]?.toLocaleUpperCase() ?? '?';
+  const initial = initialOf(account.name || account.email);
   return (
     <Menu
       label={t('account.menu', { email: account.email })}

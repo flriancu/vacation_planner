@@ -116,3 +116,63 @@ test('the editor opens with its title focused, not the leave-type list (iPhones 
   await cell(page, '2027-03-09').click();
   await expect(page.getByRole('dialog').getByRole('heading', { name: 'Editează concediul' })).toBeFocused();
 });
+
+test('no number of Escapes drops a draft without the question being answered', async ({ page }) => {
+  const dialog = await newLeave(page, '2027-03-08', '2027-03-10');
+  await dialog.getByLabel('Notă').fill('zbor la 6');
+  for (let i = 0; i < 5; i++) await page.keyboard.press('Escape'); // question, keep editing, question…
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: 'Continuă editarea' }).click();
+  await page.keyboard.press('Escape'); // asks again, never closes
+  await expect(dialog.getByRole('alert')).toContainText('Ai modificări nesalvate.');
+  await expect(dialog.getByLabel('Notă')).toHaveValue('zbor la 6');
+});
+
+test('a holiday can have only one swap day', async ({ page }) => {
+  // Sun 24 Jan 2027 is a holiday: Fri 22 or Mon 25 Jan.
+  for (const [day, expectSaved] of [
+    ['2027-01-22', true],
+    ['2027-01-25', false],
+  ] as const) {
+    const dialog = await newLeave(page, day, day);
+    await dialog.getByLabel('Tip').selectOption({ label: 'Zi compensatorie' });
+    await dialog.getByRole('radio', { name: 'Planificat' }).check();
+    if (expectSaved) {
+      await dialog.getByRole('button', { name: 'Salvează' }).click();
+      await expect(dialog).toBeHidden();
+    } else {
+      await expect(dialog.getByText('Sărbătoarea aceasta are deja o zi compensatorie')).toBeVisible();
+      await expect(dialog.getByRole('button', { name: 'Salvează' })).toBeDisabled();
+    }
+  }
+});
+
+test('leave on the other year’s days at the edge of the view stays in this view', async ({ page }) => {
+  const dialog = await newLeave(page, '2026-12-14', '2026-12-15');
+  await dialog.getByRole('button', { name: 'Salvează' }).click();
+  await expect(page.getByRole('navigation', { name: 'Anul' })).toContainText('2027');
+});
+
+test('the year arrow keeps keyboard focus at the last year', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'needs a keyboard');
+  const next = page.getByRole('button', { name: 'Anul următor' });
+  await next.focus();
+  for (let y = 2027; y < 2100; y++) await page.keyboard.press('Enter');
+  await expect(page.getByRole('navigation', { name: 'Anul' })).toContainText('2099');
+  await expect(next).toHaveAttribute('aria-disabled', 'true');
+  await expect(next).toBeFocused();
+});
+
+test('the last click of a selection that shakes onto the next day still ends it', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'mouse only');
+  await cell(page, '2027-03-08').click();
+  const box = (await cell(page, '2027-03-10').boundingBox())!;
+  await page.mouse.move(box.x + box.width - 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width + 4, box.y + box.height / 2, { steps: 3 });
+  await page.mouse.up();
+  await expect(page.getByRole('dialog', { name: 'Concediu nou' }).getByRole('button', { name: /^Perioada/ })).toHaveAttribute(
+    'data-end',
+    '2027-03-10',
+  );
+});

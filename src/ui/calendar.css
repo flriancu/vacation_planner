@@ -266,16 +266,23 @@
   .day.base-holiday::before {
     background: CanvasText;
   }
-  .fill-approved,
-  .fill-planned {
+  /* Approved: the system highlight. Planned: the highlight colour in the number and the solid
+     outline, on the normal background (a pattern behind the number made it hard to read). */
+  .fill-approved {
     forced-color-adjust: none;
     background-color: Highlight;
   }
-  .fill-approved .num,
-  .fill-planned .num {
+  .fill-approved .num {
     color: HighlightText;
   }
-  .fill-planned {
-    background-image: repeating-linear-gradient(45deg, transparent 0 4px, Canvas 4px 6px);
+  .fill-planned .num {
+    color: Highlight;
+    font-weight: 700;
+  }
+  /* The legend's "off anyway" swatches would be blank: a solid system grey. */
+  .swatch.base-weekend,
+  .swatch.base-holiday {
+    forced-color-adjust: none;
+    background-color: GrayText;
   }
 }

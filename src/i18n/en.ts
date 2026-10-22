@@ -54,6 +54,8 @@ export const en: Record<MessageKey, string> = {
   'err.auth': 'The Google session expired.',
   'err.generic': 'Something went wrong.',
   'notice.carried': 'The leave from the demo ({count}) was added to your plan.',
+  'notice.floating':
+    'Floating days are no longer in the app: the {count} in your plan are now annual leave. Check them, and change their type if they were something else.',
   'notice.skipped': 'Some entries in your plan file can’t be read by this version ({count}). They stay unchanged in the file.',
   'save.loadError': 'Your plan in Google Drive could not be opened.',
   'save.loading': 'Loading…',
@@ -103,6 +105,7 @@ export const en: Record<MessageKey, string> = {
   'editor.alsoHere': 'Also on these days:',
   'editor.overlap': 'Overlaps another planned or approved leave. Change the dates, or keep it as an idea.',
   'editor.swapAdjacent': 'A swap day can only be the Friday before or the Monday after a weekend with a legal holiday.',
+  'editor.swapTaken': 'This holiday already has a swap day. Delete that one, or choose another day.',
   'editor.tooManyIdeas': 'There are already {max} ideas on {date}. Delete one, or choose other days.',
   'editor.deletedElsewhere': 'This leave was deleted on another device. Saving brings it back.',
   'editor.unsaved': 'You have unsaved changes.',

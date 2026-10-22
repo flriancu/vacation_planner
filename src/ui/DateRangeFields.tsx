@@ -1,9 +1,7 @@
-// The calendar's Escape handling sits on the panel (role="dialog"), as the WAI-ARIA APG date picker does.
-/* oxlint-disable jsx-a11y/no-noninteractive-element-interactions */
 import { DayPicker, type DayButtonProps } from '@daypicker/react';
 import { enUS, ro } from '@daypicker/react/locale';
 import '@daypicker/react/style.css';
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { isWeekend, makeDate, type ISODate } from '../domain/dates';
 import { FIRST_YEAR, holidaysBetween, LAST_YEAR } from '../domain/holidays';
 import type { HolidayOverride } from '../domain/schema';
@@ -81,6 +79,19 @@ export function DateRangeFields({ start, end, onChange, overrides, open, onOpenC
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // However it closes (a day picked, Escape in the editor), focus goes back to the field
+  // rather than to the top of the page with the panel it was in.
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (wasOpen.current && !open) {
+      setAnchor(null);
+      setHover(null);
+      if (!document.activeElement || document.activeElement === document.body || !document.activeElement.isConnected)
+        trigger.current?.focus();
+    }
+    wasOpen.current = open;
+  }, [open]);
+
   const show = () => {
     setOpen(true);
     setAnchor(null);
@@ -103,14 +114,6 @@ export function DateRangeFields({ start, end, onChange, overrides, open, onOpenC
     }
     const [s, e] = orderRange(anchor, d);
     onChange(s, e);
-    close();
-  };
-
-  const onKeyDown = (e: KeyboardEvent) => {
-    if (e.key !== 'Escape') return;
-    // Cancel the calendar only (nothing changes), not the editor dialog around it.
-    e.preventDefault();
-    e.stopPropagation();
     close();
   };
 
@@ -146,7 +149,7 @@ export function DateRangeFields({ start, end, onChange, overrides, open, onOpenC
       </div>
 
       {open && (
-        <div ref={panel} className={`dp-panel${anchor ? ' choosing' : ''}`} role="dialog" aria-label={t('dp.panel')} onKeyDown={onKeyDown}>
+        <div ref={panel} className={`dp-panel${anchor ? ' choosing' : ''}`} role="dialog" aria-label={t('dp.panel')}>
           <p className="dp-step" aria-live="polite">
             {anchor ? t('dp.pickEnd', { date: long(anchor) }) : t('dp.pickStart')}
           </p>

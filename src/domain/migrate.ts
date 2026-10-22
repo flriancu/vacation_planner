@@ -150,13 +150,18 @@ function withoutFloating(raw: Raw): Raw {
     put(leaveTypes, annual, { ...BUILTIN_TYPES.find((t) => t.key === 'annual')!, id: annual, createdAt: EPOCH, updatedAt: EPOCH });
   }
   let blocks = raw.blocks;
+  let converted = 0;
   if (isObject(blocks)) {
     const retyped: Raw = {};
-    for (const [id, b] of Object.entries(blocks))
-      put(retyped, id, isObject(b) && floating.has(b.typeId as string) ? { ...b, typeId: annual } : b);
+    for (const [id, b] of Object.entries(blocks)) {
+      const old = isObject(b) && floating.has(b.typeId as string);
+      if (old && b.deleted !== true) converted++;
+      put(retyped, id, old ? { ...b, typeId: annual } : b);
+    }
     blocks = retyped;
   }
-  return { ...raw, leaveTypes, blocks };
+  // The page says how many changed, since they now count against annual leave.
+  return { ...raw, leaveTypes, blocks, ...(converted && { converted }) };
 }
 
 /** The owner's person and every built-in leave type, which the screens rely on. */
@@ -177,7 +182,7 @@ function withEssentials(doc: PlanDoc): PlanDoc {
 
 /** The document as it is stored: the skipped records go back where they came from. */
 export function toFile(doc: PlanDoc): Omit<PlanDoc, 'skipped'> {
-  const { skipped, ...rest } = doc;
+  const { skipped, converted: _converted, ...rest } = doc;
   if (!skipped) return rest;
   const out: Raw = { ...rest };
   for (const [key, records] of Object.entries(skipped)) {

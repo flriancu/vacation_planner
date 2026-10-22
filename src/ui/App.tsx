@@ -12,6 +12,7 @@ import type { ReplicaStore } from '../sync/Replica';
 import type { Account } from './account';
 import { BlockEditor, type Draft, type EditorTarget } from './BlockEditor';
 import { Calendar } from './Calendar';
+import { viewRange } from './calendarModel';
 import { DemoStrip } from './DemoStrip';
 import { errorDetail, errorMessage } from './errors';
 import { Header } from './Header';
@@ -217,6 +218,11 @@ function Planner({ doc, sync, saveState, saveError, notices, account }: PlannerP
 
   const closeEditor = () => {
     setEditor(null);
+    focusReturn();
+  };
+
+  /** Focus to the day in `returnTo` once it's drawn, or to the calendar. */
+  const focusReturn = () => {
     const date = returnTo.current;
     requestAnimationFrame(() => {
       const cell = date ? document.querySelector<HTMLElement>(`[data-date="${date}"]`) : null;
@@ -250,8 +256,9 @@ function Planner({ doc, sync, saveState, saveError, notices, account }: PlannerP
         updateRecord(d, 'blocks', target.blockId, { ...fields, note: draft.note || undefined, swapFor: draft.swapFor }, nextStamp(d)),
       );
     }
-    // Moved to another year: follow it there, so it doesn't seem to vanish.
-    if (yearOf(draft.start) !== year && yearOf(draft.end) !== year) {
+    // Moved out of this view (to another year): follow it there, so it doesn't seem to vanish.
+    const view = viewRange(year);
+    if (draft.end < view.from || draft.start > view.to) {
       setYear(() => yearOf(draft.start));
       returnTo.current = draft.start;
     }
@@ -275,7 +282,12 @@ function Planner({ doc, sync, saveState, saveError, notices, account }: PlannerP
     setUndo({
       id: Date.now(),
       message: batch.length === 1 ? { key: 'undo.deleted' } : { key: 'undo.deletedMany', count: batch.length },
-      undo: () => update((d) => batch.reduce((acc, b) => restoreRecord(acc, 'blocks', b.id, nextStamp(acc), b), d)),
+      undo: () => {
+        update((d) => batch.reduce((acc, b) => restoreRecord(acc, 'blocks', b.id, nextStamp(acc), b), d));
+        // The message with the button goes: focus moves to what came back (WCAG 2.4.3).
+        returnTo.current = batch.at(-1)!.start;
+        focusReturn();
+      },
     });
   };
 
@@ -283,7 +295,7 @@ function Planner({ doc, sync, saveState, saveError, notices, account }: PlannerP
   const width = useWidthClass();
 
   // The page opens on today's week, like calendar apps do, and "Today" goes back there; going
-  // back to this year by the arrows keeps the place instead.
+  // back to this year by the arrows doesn't jump to today.
   const [todayTick, setTodayTick] = useState(1);
   const scrolledTick = useRef(0);
   const goToday = () => {
@@ -307,7 +319,9 @@ function Planner({ doc, sync, saveState, saveError, notices, account }: PlannerP
   }, [hidden, height]);
 
   const noticeText = (n: SyncNotice) =>
-    n.kind === 'carried' ? t('notice.carried', { count: plural('leaves', n.count) }) : t('notice.skipped', { count: n.count });
+    n.kind === 'carried'
+      ? t('notice.carried', { count: plural('leaves', n.count) })
+      : t(n.kind === 'floating' ? 'notice.floating' : 'notice.skipped', { count: n.count });
 
   return (
     <div className="app" style={{ '--header-offset': `${hidden ? 0 : height}px` } as CSSProperties}>

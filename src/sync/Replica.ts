@@ -91,18 +91,22 @@ export const replicaKey = (sub: string) => `${PREFIX}${sub}`;
 export function unsavedCopies(store: globalThis.Storage | null = safeLocalStorage()): ReplicaAccount[] {
   const out: ReplicaAccount[] = [];
   if (!store) return out;
+  let keys: string[] = [];
   try {
-    for (let i = 0; i < store.length; i++) {
-      const key = store.key(i);
-      if (!key?.startsWith(PREFIX)) continue;
+    keys = Array.from({ length: store.length }, (_, i) => store.key(i)).filter((k): k is string => !!k?.startsWith(PREFIX));
+  } catch {
+    return out; // unreadable storage: nothing to offer
+  }
+  for (const key of keys) {
+    try {
       const value = JSON.parse(store.getItem(key) ?? 'null') as Partial<Stored> | null;
       const a = value?.account;
-      if (value?.unsaved === true && a && typeof a.email === 'string' && typeof a.name === 'string') {
-        out.push({ sub: key.slice(PREFIX.length), email: a.email, name: a.name });
+      if (value?.unsaved === true && a && typeof a.email === 'string' && a.email && typeof a.name === 'string') {
+        out.push({ sub: key.slice(PREFIX.length), email: a.email, name: a.name.trim() || a.email.split('@')[0]! });
       }
+    } catch {
+      // one unreadable copy says nothing about the others
     }
-  } catch {
-    // unreadable storage: nothing to offer
   }
   return out;
 }

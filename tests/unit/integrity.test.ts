@@ -173,6 +173,8 @@ describe('floating days are gone', () => {
     expect(doc.leaveTypes.old).toBeUndefined();
     expect(doc.leaveTypes[doc.blocks[blockId]!.typeId]!.key).toBe('annual');
     expect(skippedCount(doc)).toBe(0);
+    expect(doc.converted).toBe(1); // the page says so: these now count against annual leave
+    expect('converted' in toFile(doc)).toBe(false);
   });
 });
 

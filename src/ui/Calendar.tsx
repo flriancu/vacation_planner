@@ -11,6 +11,7 @@ import {
 import { blockStats } from '../domain/blocks';
 import { blockBudget, buildDays } from '../domain/calendar';
 import { addDays, overlaps, yearOf, type ISODate } from '../domain/dates';
+import { FIRST_YEAR, LAST_YEAR } from '../domain/holidays';
 import { live, type Block, type PlanDoc } from '../domain/schema';
 import { useI18n } from '../i18n';
 import { describeBlock } from './describe';
@@ -42,6 +43,11 @@ const MAX_OUTLINES = 4;
 const STEPS: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
 /** A press becomes a drag only past this distance, so a trembling click stays one day. */
 const DRAG_PX = 10;
+
+/** The day under the pointer, if any. */
+function dayAt(ev: PointerEvent): ISODate | undefined {
+  return (document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null)?.closest<HTMLElement>('[data-date]')?.dataset.date;
+}
 
 /**
  * Mount one per year (`key={year}`), so selection and focus start fresh.
@@ -94,7 +100,9 @@ export function Calendar({ year, doc, personId, today, onCreate, onOpen }: Props
   }, [focusDate]);
 
   const finish = (a: ISODate, b: ISODate) => {
-    const [start, end] = orderRange(a, b);
+    // Days shown past 1900–2099 (the edges of those years' views) can't hold leave.
+    const [start, end] = orderRange(a, b).map((d) => clampDate(d, `${FIRST_YEAR}-01-01`, `${LAST_YEAR}-12-31`)) as [ISODate, ISODate];
+    if (start > end) return;
     setSelection(null);
     setPending(null);
     onCreate(start, end);
@@ -121,13 +129,24 @@ export function Calendar({ year, doc, personId, today, onCreate, onOpen }: Props
   const onPointerDown = (e: ReactPointerEvent, date: ISODate) => {
     // A drag that ends on another day sends its click to a parent, so clear the flag on every new press.
     swallowClick.current = false;
-    if ((e.pointerType !== 'mouse' && e.pointerType !== 'pen') || e.button !== 0 || pending) return;
+    if ((e.pointerType !== 'mouse' && e.pointerType !== 'pen') || e.button !== 0) return;
+    if (pending) {
+      // The last day of a click-click selection: a shake onto the next day must not lose it.
+      const release = (ev: PointerEvent) => {
+        document.removeEventListener('pointerup', release);
+        if (dayAt(ev) !== date) {
+          swallowClick.current = true;
+          activate(date);
+        }
+      };
+      document.addEventListener('pointerup', release);
+      return;
+    }
     e.preventDefault(); // no text selection while dragging
     const move = (ev: PointerEvent) => {
       const dr = drag.current;
       if (!dr || (!dr.moved && Math.hypot(ev.clientX - dr.x, ev.clientY - dr.y) < DRAG_PX)) return;
-      const d = (document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null)?.closest<HTMLElement>('[data-date]')?.dataset
-        .date;
+      const d = dayAt(ev);
       if (d && d !== dr.last) {
         dr.moved = true;
         dr.last = d;
@@ -146,22 +165,27 @@ export function Calendar({ year, doc, personId, today, onCreate, onOpen }: Props
       }
       // A press that shook onto the next day without becoming a drag: the browser sends its
       // click to the row, not to a day, so it counts here as a click on the day it began on.
-      const under = (document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null)?.closest<HTMLElement>('[data-date]');
-      if (under?.dataset.date !== dr.anchor) {
+      if (dayAt(ev) !== dr.anchor) {
         grid.current?.querySelector<HTMLElement>(`[data-date="${dr.anchor}"]`)?.focus({ preventScroll: true });
         setFocusDate(dr.anchor);
         activate(dr.anchor);
       }
     };
+    // Escape ends a drag wherever keyboard focus is (the grid's own keys need focus inside it).
+    const onKey = (ev: globalThis.KeyboardEvent) => {
+      if (ev.key === 'Escape') cancelDrag();
+    };
     const stop = () => {
       document.removeEventListener('pointermove', move);
       document.removeEventListener('pointerup', up);
       document.removeEventListener('pointercancel', cancelDrag);
+      document.removeEventListener('keydown', onKey);
     };
     drag.current = { anchor: date, last: date, moved: false, x: e.clientX, y: e.clientY, stop };
     document.addEventListener('pointermove', move);
     document.addEventListener('pointerup', up);
     document.addEventListener('pointercancel', cancelDrag);
+    document.addEventListener('keydown', onKey);
   };
 
   const onClick = (e: MouseEvent, date: ISODate) => {

@@ -54,6 +54,8 @@ export const ro = {
   'err.auth': 'Sesiunea Google a expirat.',
   'err.generic': 'Ceva n-a mers.',
   'notice.carried': 'Concediile din demo ({count}) au fost adăugate în planul tău.',
+  'notice.floating':
+    'Zilele flotante nu mai există în aplicație: cele {count} din planul tău sunt acum concediu de odihnă. Verifică-le, și schimbă-le tipul dacă erau altceva.',
   'notice.skipped': 'Unele înregistrări din fișierul planului nu pot fi citite de această versiune ({count}). Rămân neschimbate în fișier.',
   'year.prev': 'Anul anterior',
   'year.next': 'Anul următor',
@@ -101,6 +103,7 @@ export const ro = {
   'editor.alsoHere': 'Tot în aceste zile:',
   'editor.overlap': 'Se suprapune cu alt concediu planificat sau aprobat. Schimbă perioada, sau păstrează-l ca idee.',
   'editor.swapAdjacent': 'O zi compensatorie poate fi doar vinerea dinaintea sau lunea de după un weekend cu sărbătoare legală.',
+  'editor.swapTaken': 'Sărbătoarea aceasta are deja o zi compensatorie. Șterge-o pe aceea, sau alege altă zi.',
   'editor.tooManyIdeas': 'Pe {date} sunt deja {max} idei. Șterge una, sau alege alte zile.',
   'editor.deletedElsewhere': 'Concediul a fost șters pe alt dispozitiv. Dacă salvezi, revine.',
   'editor.unsaved': 'Ai modificări nesalvate.',

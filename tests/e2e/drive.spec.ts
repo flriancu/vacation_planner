@@ -96,3 +96,12 @@ test('a block that already breaks a rule (from another device) can still take a 
   await expect(edit.getByRole('button', { name: 'Salvează' })).toBeDisabled();
   await expect(edit.getByText('Se suprapune cu alt concediu')).toBeVisible();
 });
+
+test('only one header menu is open at a time', async ({ page }) => {
+  await open(page, new FakeDrive());
+  await page.getByRole('button', { name: 'Setări' }).click();
+  await page.getByRole('button', { name: /^Cont:/ }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.menu-panel')).toHaveCount(1);
+  await expect(page.locator('.menu-panel')).toContainText('ana@example.test');
+});

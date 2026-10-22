@@ -9,7 +9,7 @@ import { retryDelay } from './retry';
 /** `signin`: the Google session expired; changes are kept until the user reconnects. */
 export type SaveState = 'saved' | 'saving' | 'error' | 'signin';
 
-export type SyncNotice = { kind: 'carried'; count: number } | { kind: 'skipped'; count: number };
+export type SyncNotice = { kind: 'carried' | 'skipped' | 'floating'; count: number };
 
 export interface SyncSnapshot {
   doc: PlanDoc | null;
@@ -211,6 +211,10 @@ export class DocumentSync {
     if (kept && kept.owner.googleSub === doc.owner.googleSub) current = absorb(current, kept);
     if (before && before.owner.googleSub === doc.owner.googleSub) current = absorb(current, before);
     if (!hasLocalWins(current, doc)) current = doc;
+    // Old floating days were turned into annual leave on loading: save that once, so the file
+    // no longer holds them and the notice below doesn't come back on every open.
+    const converted = doc.converted ?? 0;
+    if (converted && current === doc) current = { ...doc };
     duplicates = [];
 
     const notices: SyncNotice[] = [];
@@ -220,6 +224,7 @@ export class DocumentSync {
       current = absorb(current, demo);
       notices.push({ kind: 'carried', count: carried });
     }
+    if (converted) notices.push({ kind: 'floating', count: converted });
     const skipped = skippedCount(current);
     if (skipped) notices.push({ kind: 'skipped', count: skipped });
 

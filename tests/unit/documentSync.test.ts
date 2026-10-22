@@ -3,6 +3,7 @@ import { live, newPlanDoc, typeByKey, type PlanDoc } from '../../src/domain/sche
 import { addRecord } from '../../src/domain/schema';
 import { MemoryStorage } from '../../src/storage/MemoryStorage';
 import type { SaveResult } from '../../src/storage/Storage';
+import { migrate } from '../../src/domain/migrate';
 import { DocumentSync, OtherOwnerError, PlanRemovedError, type SyncOptions } from '../../src/sync/DocumentSync';
 import { LocalReplica } from '../../src/sync/Replica';
 import { testContext } from '../fixtures/builder';
@@ -358,5 +359,37 @@ describe('DocumentSync: plans made with other ids, and files that go away', () =
     await vi.advanceTimersByTimeAsync(3000);
     expect(s.getSnapshot().loadError).toBeNull();
     expect(s.getSnapshot().doc).not.toBeNull();
+  });
+});
+
+describe('DocumentSync: old floating days', () => {
+  it('says how many became annual leave, and saves that once', async () => {
+    const storage = new TestStorage();
+    const old = otherDevicesPlan('2027-11-08');
+    const floating = { ...typeByKey(old, 'annual')!, id: 'old-floating', key: 'floating' as never, budget: 'floating' as never };
+    const block = live(old.blocks)[0]!;
+    const file = {
+      ...old,
+      leaveTypes: { ...old.leaveTypes, [floating.id]: floating },
+      blocks: { [block.id]: { ...block, typeId: floating.id } },
+    };
+    await storage.create(migrate(JSON.parse(JSON.stringify(file))) as PlanDoc);
+    // MemoryStorage keeps documents as given; the file as Drive would hand it out goes through migrate on load.
+    const s = sync(
+      new (class extends TestStorage {
+        override async load(id: string) {
+          const { version } = await storage.load(id);
+          return { doc: migrate(JSON.parse(JSON.stringify(file))), version };
+        }
+        override listCalendars = () => storage.listCalendars();
+        override save = (id: string, doc: PlanDoc, base: string) => storage.save(id, doc, base);
+        override version = (id: string) => storage.version(id);
+      })(),
+    );
+    await s.open();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(s.getSnapshot().notices).toContainEqual({ kind: 'floating', count: 1 });
+    expect(storage.saves).toBe(1); // the converted plan is written back once
+    expect(Object.values((await storedDoc(storage)).leaveTypes).some((t) => t.key === ('floating' as never))).toBe(false);
   });
 });

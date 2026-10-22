@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type SyntheticEvent } from 'react';
+import { useEffect, useEffectEvent, useMemo, useRef, useState, type FormEvent, type SyntheticEvent } from 'react';
 import { blockStats } from '../domain/blocks';
 import { blockBudget, buildDays, findOverlaps, fullOfIdeas, MAX_IDEAS_PER_DAY } from '../domain/calendar';
 import { addDays, overlaps, yearOf, type ISODate } from '../domain/dates';
@@ -121,10 +121,12 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
       .filter((b) => b.personId === personId && b.id !== original?.id && b.status !== 'idea' && b.swapFor)
       .map((b) => b.swapFor),
   );
-  const swapFor = swapHolidays.some((h) => h.date === draft.swapFor)
-    ? draft.swapFor
-    : (swapHolidays.find((h) => !taken.has(h.date)) ?? swapHolidays[0])?.date;
-  const cannotSave = !valid || blocked || crowded.length > 0 || misplacedSwap;
+  // One swap day per holiday: a holiday another planned or approved swap day stands for is not on offer.
+  const freeHolidays =
+    draft.status === 'idea' ? swapHolidays : swapHolidays.filter((h) => !taken.has(h.date) || h.date === original?.swapFor);
+  const swapTaken = touched && type.key === 'swap' && swapHolidays.length > 0 && freeHolidays.length === 0;
+  const swapFor = freeHolidays.some((h) => h.date === draft.swapFor) ? draft.swapFor : freeHolidays[0]?.date;
+  const cannotSave = !valid || blocked || crowded.length > 0 || misplacedSwap || swapTaken;
   const alsoHere =
     original && valid
       ? live(doc.blocks).filter((b) => b.personId === personId && b.id !== original.id && overlaps(b.start, b.end, draft.start, draft.end))
@@ -155,13 +157,31 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
   const leave = (then: () => void) => (dirty ? setLeaving(() => then) : then());
   const close = () => dialog.current?.close();
 
-  // Escape (the dialog's "cancel"): close the month calendar first, then ask about unsaved changes.
-  // Handled here rather than on the calendar's keydown, because Safari closes the dialog regardless.
-  const onCancel = (e: SyntheticEvent) => {
-    e.preventDefault();
+  // Escape, one step at a time: close the month calendar, else answer "keep editing" to the
+  // question, else ask about unsaved changes (or close when there are none).
+  const escape = () => {
     if (pickerOpen) setPickerOpen(false);
     else if (leaving) setLeaving(null);
     else leave(close);
+  };
+  // Taken before the browser sees it: Escape on a modal dialog is a "close request", and Chrome
+  // lets a page cancel only the first of two in a row, so a second Escape would close the editor
+  // and drop the draft. A key some other part already handled (a tooltip closing) is left alone.
+  const onEscape = useEffectEvent(escape);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      e.preventDefault();
+      onEscape();
+    };
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
+  }, []);
+  // Other close requests (Android's back gesture): the same steps, when the browser lets us.
+  const onCancel = (e: SyntheticEvent) => {
+    if (!e.cancelable) return;
+    e.preventDefault();
+    escape();
   };
 
   // No "are you sure?": the delete can be undone from the message that follows (App).
@@ -223,9 +243,9 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
         {type.key === 'swap' && (
           <label>
             {t('editor.swapFor')}
-            <select value={swapFor ?? ''} onChange={(e) => set({ swapFor: e.target.value })} disabled={swapHolidays.length === 0}>
-              {swapHolidays.length === 0 && <option value="">{t('editor.swapNone')}</option>}
-              {swapHolidays.map((h) => (
+            <select value={swapFor ?? ''} onChange={(e) => set({ swapFor: e.target.value })} disabled={freeHolidays.length === 0}>
+              {freeHolidays.length === 0 && <option value="">{t('editor.swapNone')}</option>}
+              {freeHolidays.map((h) => (
                 <option key={h.date} value={h.date}>
                   {fmt(h.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} — {h.names.map(name).join(' · ')}
                 </option>
@@ -248,6 +268,7 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
           )}
           {blocked && <span className="warning">{t('editor.overlap')}</span>}
           {misplacedSwap && <span className="warning">{t('editor.swapAdjacent')}</span>}
+          {swapTaken && <span className="warning">{t('editor.swapTaken')}</span>}
           {crowded.length > 0 && (
             <span className="warning">
               {t('editor.tooManyIdeas', {

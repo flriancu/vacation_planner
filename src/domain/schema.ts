@@ -126,6 +126,8 @@ export type PlanDoc = {
    * so they never reach the calendar, and written back unchanged (`toFile`).
    */
   skipped?: Partial<Record<keyof Collections, Record<string, unknown>>>;
+  /** Floating days that migrate.ts turned into annual leave on this load (not stored). */
+  converted?: number;
 } & { [K in keyof Collections]: Record<string, Collections[K]> };
 
 export const SCHEMA_VERSION = 1;

@@ -33,4 +33,15 @@ describe("this device's copies of plans", () => {
     expect(store.getItem(replicaKey('alice'))).not.toBeNull();
     expect(store.getItem(replicaKey('bob'))).toBeNull();
   });
+
+  it('is not blinded by one unreadable copy, and names an account without a name by its address', () => {
+    const store = new FakeStorage() as unknown as Storage;
+    store.setItem(replicaKey('broken'), '{not json');
+    new LocalReplica(replicaKey('maria'), { sub: 'maria', email: 'maria@example.test', name: ' ' }, store).write(
+      new DocBuilder().doc,
+      true,
+    );
+    store.setItem(replicaKey('zz-broken'), '{"unsaved":true,"account":{"email":"","name":""}}');
+    expect(unsavedCopies(store)).toEqual([{ sub: 'maria', email: 'maria@example.test', name: 'maria' }]);
+  });
 });
