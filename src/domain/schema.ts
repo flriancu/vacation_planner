@@ -90,6 +90,8 @@ export interface Follow extends Meta {
 
 export interface Settings {
   lang: 'ro' | 'en';
+  /** Plan files this plan was started instead of ("start a new plan"): copies of them are not merged in. */
+  replaces?: string[];
   gcalCalendarId?: string;
   updatedAt: Stamp;
 }

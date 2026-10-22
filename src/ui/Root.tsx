@@ -56,7 +56,7 @@ export function Root() {
   /** Set at sign-in: the demo plan made before it, carried into the Drive plan once (AUTH-3). */
   const carryDemo = useRef(false);
   const sub = session?.user.sub;
-  const drive = useMemo(() => (sub ? new DriveStorage(() => auth.accessToken()) : null), [sub]);
+  const drive = useMemo(() => (sub ? new DriveStorage(() => auth.accessToken(sub)) : null), [sub]);
   const replica = useMemo(
     () =>
       session
@@ -113,9 +113,12 @@ export function Root() {
 
   const signOut = useCallback(
     (keepDeviceCopy = false) => {
-      if (!keepDeviceCopy) replica?.clear();
+      // A copy with changes that never reached Drive stays, however the sign-out came (the
+      // load-error screen too, where nothing was loaded and so nothing looked unsaved).
+      const keep = keepDeviceCopy || !!replica?.hasUnsaved();
+      if (!keep) replica?.clear();
       auth.signOut();
-      if (!keepDeviceCopy) {
+      if (!keep) {
         writeHint(null);
         setHint(null);
       }

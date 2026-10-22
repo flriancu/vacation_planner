@@ -4,7 +4,7 @@ import { addRecord } from '../../src/domain/schema';
 import { MemoryStorage } from '../../src/storage/MemoryStorage';
 import type { SaveResult } from '../../src/storage/Storage';
 import { migrate } from '../../src/domain/migrate';
-import { DocumentSync, OtherOwnerError, PlanRemovedError, type SyncOptions } from '../../src/sync/DocumentSync';
+import { DocumentSync, OtherOwnerError, PlanMissingError, PlanRemovedError, type SyncOptions } from '../../src/sync/DocumentSync';
 import { LocalReplica } from '../../src/sync/Replica';
 import { testContext } from '../fixtures/builder';
 
@@ -191,7 +191,7 @@ describe('DocumentSync', () => {
     const s = sync(storage);
     await s.open();
     expect(s.getSnapshot().loadError).toBeInstanceOf(PlanRemovedError);
-    await s.open(true);
+    await s.open('new');
     expect(s.getSnapshot().loadError).toBeNull();
     expect(await storage.listCalendars()).toHaveLength(1);
   });
@@ -301,7 +301,7 @@ describe('DocumentSync: plans made with other ids, and files that go away', () =
     const s = sync(storage, { replica: new LocalReplica('r', undefined, store) });
     await s.open();
     expect(s.getSnapshot().loadError).toBeInstanceOf(PlanRemovedError);
-    await s.open(true);
+    await s.open('new');
     await vi.advanceTimersByTimeAsync(0);
     expect(live(s.getSnapshot().doc!.blocks)).toEqual([]);
     expect(JSON.stringify(await storedDoc(storage))).not.toContain('old private note');
@@ -391,5 +391,65 @@ describe('DocumentSync: old floating days', () => {
     expect(s.getSnapshot().notices).toContainEqual({ kind: 'floating', count: 1 });
     expect(storage.saves).toBe(1); // the converted plan is written back once
     expect(Object.values((await storedDoc(storage)).leaveTypes).some((t) => t.key === ('floating' as never))).toBe(false);
+  });
+});
+
+describe('DocumentSync: after sign-out, deleted plans, replaced plans', () => {
+  it('never looks for its plan again once closed (a later sign-in is someone else)', async () => {
+    const storage = new (class extends TestStorage {
+      lists = 0;
+      override async listCalendars() {
+        this.lists++;
+        return super.listCalendars();
+      }
+    })();
+    const s = sync(storage);
+    await s.open();
+    storage.failSaves = [Object.assign(new Error('gone'), { fileGone: true })];
+    addBlock(s, '2027-03-01');
+    const lists = storage.lists;
+    await s.close(); // the last save meets a gone file after the sign-out
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(storage.lists).toBe(lists);
+  });
+
+  it('asks before bringing a plan deleted for good back from a device copy', async () => {
+    const storage = new TestStorage();
+    const store = new MapStore();
+    const first = sync(storage, { replica: new LocalReplica('r', undefined, store) });
+    await first.open();
+    addBlock(first, '2027-03-01', 'private');
+    await first.flush();
+    // Deleted for good in Drive: not listed, not in the trash.
+    (storage as unknown as { files: Map<string, unknown> }).files.clear();
+
+    const s = sync(storage, { replica: new LocalReplica('r', undefined, store) });
+    await s.open();
+    expect(s.getSnapshot().loadError).toBeInstanceOf(PlanMissingError);
+    expect(await storage.listCalendars()).toEqual([]);
+    await s.open('restore');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(await storedBlocks(storage)).toEqual(['2027-03-01']);
+  });
+
+  it('keeps copies of a replaced plan out of the new one, on every device', async () => {
+    const storage = new TestStorage();
+    const laptop = new MapStore();
+    const a = sync(storage, { replica: new LocalReplica('r', undefined, laptop) });
+    await a.open();
+    addBlock(a, '2027-03-01', 'old plan');
+    await a.flush();
+    await storage.remove((await storage.listCalendars())[0]!.calendarId);
+
+    const phone = sync(storage, { replica: new LocalReplica('r', undefined, new MapStore()) });
+    await phone.open();
+    await phone.open('new');
+    await vi.advanceTimersByTimeAsync(0);
+    // The laptop opens the app again: its copy of the old plan must not come back.
+    const again = sync(storage, { replica: new LocalReplica('r', undefined, laptop) });
+    await again.open();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(await storedBlocks(storage)).toEqual([]);
+    expect(laptop.items.values().next().value).not.toContain('old plan');
   });
 });

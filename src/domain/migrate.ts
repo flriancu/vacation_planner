@@ -22,8 +22,12 @@ type Raw = Record<string, unknown>;
 const isObject = (v: unknown): v is Raw => typeof v === 'object' && v !== null && !Array.isArray(v);
 const isText = (v: unknown): v is string => typeof v === 'string';
 const isStamp = (v: unknown): v is string => isText(v) && /^\d{4}-\d{2}-\d{2}T/.test(v) && Number.isFinite(Date.parse(v));
-/** Clocks run fast by minutes or hours, not by a week: a stamp further ahead is bogus. */
-const FUTURE_SLACK_MS = 7 * 86_400_000;
+/**
+ * A stamp more than a year ahead of this device's clock is bogus (a hostile or broken file). The
+ * margin is wide on purpose: a device whose clock is days or weeks behind must not take real,
+ * recent stamps for bogus ones and turn them into 1970.
+ */
+const FUTURE_SLACK_MS = 366 * 86_400_000;
 
 /**
  * A stamp merges can trust: always UTC with milliseconds (merges compare them as strings, so an
@@ -127,7 +131,9 @@ export function migrate(raw: unknown, now: number = Date.now()): PlanDoc {
 }
 
 function readSettings(s: Raw, now: number): Settings {
-  return { ...s, lang: s.lang === 'en' ? 'en' : 'ro', updatedAt: stamp(s.updatedAt, now) } as Settings;
+  const out = { ...s, lang: s.lang === 'en' ? 'en' : 'ro', updatedAt: stamp(s.updatedAt, now) } as Settings & { replaces?: unknown };
+  if (!(Array.isArray(out.replaces) && out.replaces.every(isText))) delete out.replaces;
+  return out;
 }
 
 const alive = <T extends Meta>(c: Record<string, T>) => Object.values(c).filter((r) => !r.deleted);
@@ -187,7 +193,12 @@ export function toFile(doc: PlanDoc): Omit<PlanDoc, 'skipped'> {
   const out: Raw = { ...rest };
   for (const [key, records] of Object.entries(skipped)) {
     const merged: Raw = { ...records };
-    for (const [id, record] of Object.entries(out[key] as Raw)) put(merged, id, record);
+    for (const [id, record] of Object.entries(out[key] as Raw)) {
+      // Both for one id: the newer one is kept (a set-aside record a newer build wrote stays).
+      const unread = Object.hasOwn(records, id) ? (records[id] as { updatedAt?: unknown }) : undefined;
+      if (unread && String(unread.updatedAt ?? '') >= (record as Meta).updatedAt) continue;
+      put(merged, id, record);
+    }
     out[key] = merged;
   }
   return out as Omit<PlanDoc, 'skipped'>;

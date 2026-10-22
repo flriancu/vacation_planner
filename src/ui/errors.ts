@@ -2,12 +2,13 @@ import { UnsupportedPlanError } from '../domain/migrate';
 import { AuthExpiredError } from '../google/auth';
 import { DriveError, PlanFileGoneError } from '../google/drive';
 import type { MessageKey } from '../i18n';
-import { OtherOwnerError, PlanRemovedError, SaveConflictError } from '../sync/DocumentSync';
+import { OtherOwnerError, PlanMissingError, PlanRemovedError, SaveConflictError } from '../sync/DocumentSync';
 
 /** What went wrong, in the user's words (the technical text goes under "Technical details"). */
 export function errorMessage(e: unknown): MessageKey {
   if (e instanceof AuthExpiredError) return 'err.auth';
   if (e instanceof PlanRemovedError) return 'err.removed';
+  if (e instanceof PlanMissingError) return 'err.missingCopy';
   if (e instanceof PlanFileGoneError) return e.reason === 'trashed' ? 'err.removed' : 'err.missing';
   if (e instanceof OtherOwnerError) return 'err.owner';
   if (e instanceof UnsupportedPlanError) return 'err.unsupported';

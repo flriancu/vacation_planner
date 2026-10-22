@@ -1,6 +1,9 @@
 import { merge } from './merge';
 import { COLLECTION_KEYS, live, put, type Collections, type Meta, type PlanDoc } from './schema';
 
+/** A plan's own person: the one with the account (alive or not), else the first alive. */
+const own = (d: PlanDoc) => Object.values(d.people).find((p) => p.hasAccount)?.id ?? live(d.people)[0]?.id;
+
 /** Collections whose records point at a person and, for blocks, a leave type. */
 const PERSONAL: readonly (keyof Collections)[] = ['blocks', 'yearSettings', 'adjustments', 'dismissals'];
 
@@ -12,8 +15,8 @@ const PERSONAL: readonly (keyof Collections)[] = ['blocks', 'yearSettings', 'adj
  * For two versions of the same file nothing is remapped, so this is exactly `merge`.
  */
 export function absorb(into: PlanDoc, from: PlanDoc): PlanDoc {
-  const me = live(into.people)[0]?.id;
-  const them = live(from.people)[0]?.id;
+  const me = live(into.people).find((p) => p.hasAccount)?.id ?? live(into.people)[0]?.id;
+  const them = own(from);
   const person = (id: string) => (id === them && me ? me : id);
   const typeIds = new Map<string, string>();
   for (const t of Object.values(from.leaveTypes)) {

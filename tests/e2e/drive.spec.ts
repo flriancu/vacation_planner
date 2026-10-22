@@ -105,3 +105,17 @@ test('only one header menu is open at a time', async ({ page }) => {
   await expect(page.locator('.menu-panel')).toHaveCount(1);
   await expect(page.locator('.menu-panel')).toContainText('ana@example.test');
 });
+
+test('signing out from the load-error screen keeps changes that never reached Drive', async ({ page }) => {
+  const drive = new FakeDrive();
+  await open(page, drive);
+  drive.failWrites = 1000;
+  await addPlanned(page, '2027-03-08', '2027-03-10'); // saved on this device only
+  await expect(page.getByRole('button', { name: /Nu s-a salvat/ })).toBeVisible();
+  drive.failLists = 1000;
+  await page.reload();
+  await page.getByRole('button', { name: 'Deconectare' }).click();
+  const copy = await page.evaluate(() => localStorage.getItem('vacation-planner.replica.u1'));
+  expect(copy).toContain('2027-03-08');
+  expect(JSON.parse(copy!).unsaved).toBe(true);
+});

@@ -173,6 +173,13 @@ describe('DriveStorage', () => {
     await expect(storage().load('f1')).rejects.toBeInstanceOf(UnsupportedPlanError);
   });
 
+  it('gives up on a file list that never ends, and on a listed file without an id', async () => {
+    fakeDrive([[/.*/, () => ({ json: { files: [], nextPageToken: 'again' } })]]);
+    await expect(storage().listCalendars()).rejects.toBeInstanceOf(DriveError);
+    fakeDrive([[/.*/, () => ({ json: { files: [{ version: '1' }] } })]]);
+    await expect(storage().listCalendars()).rejects.toBeInstanceOf(DriveError);
+  });
+
   it('turns 401 into AuthExpiredError, and passes through an error from the token getter', async () => {
     fakeDrive([[/.*/, () => ({ status: 401, text: 'expired' })]]);
     await expect(storage().listCalendars()).rejects.toBeInstanceOf(AuthExpiredError);

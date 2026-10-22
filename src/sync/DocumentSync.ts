@@ -42,6 +42,16 @@ export class PlanRemovedError extends Error {
   }
 }
 
+/** No plan file anywhere in Drive, but this device has a copy of one: restore it, or start anew. */
+export class PlanMissingError extends Error {
+  constructor() {
+    super('Your plan file is no longer in Google Drive; this device has a copy of it');
+  }
+}
+
+/** How to open: as usual; a new plan instead of the one in the trash; or the plan from this device's copy. */
+export type OpenMode = 'normal' | 'new' | 'restore';
+
 export class OtherOwnerError extends Error {
   constructor() {
     super('This plan file belongs to another Google account');
@@ -95,13 +105,13 @@ export class DocumentSync {
     return this.current !== this.saved;
   }
 
-  /** Opens my plan; idempotent. `startNew` creates a new plan even if one is in the trash. */
-  open(startNew = false): Promise<void> {
+  /** Opens my plan; idempotent. See `OpenMode` for the ways out of a missing or trashed plan. */
+  open(how: OpenMode = 'normal'): Promise<void> {
     this.closed = false;
     clearTimeout(this.loadTimer);
-    if (this.opening && !startNew) return this.opening;
+    if (this.opening && how === 'normal') return this.opening;
     this.set({ loadError: null });
-    this.opening = this.enqueue(() => this.openOwn(startNew)).then(
+    this.opening = this.enqueue(() => this.openOwn(how)).then(
       () => {
         this.loadAttempts = 0;
       },
@@ -118,7 +128,7 @@ export class DocumentSync {
   update = (change: (doc: PlanDoc) => PlanDoc) => {
     if (!this.current) return;
     this.current = change(this.current);
-    this.options.replica?.write(this.current, true);
+    this.options.replica?.write(this.current, true, this.calendarId);
     this.set({ doc: this.current, saveState: this.snapshot.saveState === 'signin' ? 'signin' : 'saving' });
     this.schedule(this.options.saveDelayMs ?? 1500);
   };
@@ -174,17 +184,27 @@ export class DocumentSync {
     this.set({ notices: this.snapshot.notices.filter((n) => n.kind !== kind) });
   }
 
-  private async openOwn(startNew: boolean) {
+  private async openOwn(how: OpenMode) {
     const { storage, owner, replica, carry } = this.options;
+    const startNew = how === 'new';
     // What this tab had open before (a reopen after its file went away) is kept and merged in.
-    const before = startNew ? null : this.current;
+    const before = startNew ? null : this.current && { doc: this.current, calendarId: this.calendarId };
     const refs = await storage.listCalendars();
     let doc: PlanDoc;
     let duplicates: PlanDoc[] = [];
     this.duplicates = [];
     if (refs.length === 0) {
-      if (!startNew && (await storage.listRemoved()).length > 0) throw new PlanRemovedError();
+      const removed = await storage.listRemoved();
+      if (how === 'normal' && removed.length > 0) throw new PlanRemovedError();
+      const copy = replica?.read();
+      // A plan deleted for good comes back from a device's copy only when asked.
+      if (how === 'normal' && copy && live(copy.doc.blocks).length > 0) throw new PlanMissingError();
       doc = this.options.init();
+      if (startNew) {
+        // Copies of the plans this one replaces (on other devices and tabs too) stay out of it.
+        const replaces = [...removed.map((r) => r.calendarId), ...(copy?.calendarId ? [copy.calendarId] : [])];
+        if (replaces.length) doc = { ...doc, settings: { ...doc.settings, replaces } };
+      }
       ({ calendarId: this.calendarId, version: this.version } = await storage.create(doc));
     } else {
       // The oldest file is the plan; any others (two devices creating one at once) are added to
@@ -205,11 +225,14 @@ export class DocumentSync {
 
     let current = doc;
     for (const d of duplicates) current = absorb(current, d);
-    // "Start a new plan" means new: the old plan's copy on this device goes, not into the new one.
-    if (startNew) replica?.clear();
+    // "Start a new plan" means new: a copy of a plan it replaced, here or on any device, stays out.
+    const replaced = new Set(doc.settings.replaces ?? []);
+    const ours = (c: { doc: PlanDoc; calendarId?: string } | null | undefined) =>
+      !!c && c.doc.owner.googleSub === doc.owner.googleSub && !replaced.has(c.calendarId ?? '');
     const kept = startNew ? null : replica?.read();
-    if (kept && kept.owner.googleSub === doc.owner.googleSub) current = absorb(current, kept);
-    if (before && before.owner.googleSub === doc.owner.googleSub) current = absorb(current, before);
+    if (startNew || (kept && !ours(kept))) replica?.clear();
+    if (ours(kept)) current = absorb(current, kept!.doc);
+    if (ours(before)) current = absorb(current, before!.doc);
     if (!hasLocalWins(current, doc)) current = doc;
     // Old floating days were turned into annual leave on loading: save that once, so the file
     // no longer holds them and the notice below doesn't come back on every open.
@@ -231,10 +254,10 @@ export class DocumentSync {
     this.current = current;
     this.set({ doc: current, notices, saveState: this.dirty ? 'saving' : 'saved' });
     if (this.dirty) {
-      replica?.write(current, true);
+      replica?.write(current, true, this.calendarId);
       this.schedule(0);
     } else {
-      replica?.write(current, false);
+      replica?.write(current, false, this.calendarId);
       void this.removeDuplicates();
     }
   }
@@ -242,13 +265,14 @@ export class DocumentSync {
   private async saveRounds() {
     for (let round = 0; round < MAX_ROUNDS; round++) {
       const toSave = this.current;
-      if (!toSave || toSave === this.saved) return;
+      // No file yet (it is being looked up again): the open that follows saves what's pending.
+      if (!toSave || toSave === this.saved || !this.calendarId) return;
       this.set({ saveState: 'saving' });
       const result = await this.options.storage.save(this.calendarId, toSave, this.version);
       if (result.ok) {
         this.version = result.version;
         this.saved = toSave;
-        this.options.replica?.write(this.current!, this.dirty);
+        this.options.replica?.write(this.current!, this.dirty, this.calendarId);
         this.set({ saveState: this.dirty ? 'saving' : 'saved', saveError: null });
         void this.removeDuplicates();
         if (this.dirty) this.schedule(this.options.saveDelayMs ?? 1500);
@@ -282,6 +306,7 @@ export class DocumentSync {
    * was deleted): look for the plan again, and add what this tab has to it.
    */
   private reopen() {
+    if (this.closed) return; // signed out meanwhile: never again, and never with another account
     this.opening = null;
     this.calendarId = '';
     void this.open();

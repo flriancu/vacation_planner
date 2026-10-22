@@ -5,9 +5,10 @@ import { deleteRecord, restoreRecord, updateRecord } from '../domain/edit';
 import { FIRST_YEAR, LAST_YEAR } from '../domain/holidays';
 import { addRecord, live, newPlanDoc, STATUS_RANK, type Block, type PlanDoc, type RecordContext } from '../domain/schema';
 import { AuthExpiredError } from '../google/auth';
+import { PlanFileGoneError } from '../google/drive';
 import { I18nProvider, useI18n, type Lang } from '../i18n';
 import type { Storage } from '../storage/Storage';
-import { PlanRemovedError, type DocumentSync } from '../sync/DocumentSync';
+import { PlanMissingError, PlanRemovedError, type DocumentSync } from '../sync/DocumentSync';
 import type { ReplicaStore } from '../sync/Replica';
 import type { Account } from './account';
 import { BlockEditor, type Draft, type EditorTarget } from './BlockEditor';
@@ -164,8 +165,15 @@ function LoadError({ error, account, sync }: { error: unknown; account: Account;
             {t('load.retry')}
           </button>
         )}
-        {error instanceof PlanRemovedError && (
-          <button type="button" onClick={() => void sync.open(true)}>
+        {error instanceof PlanMissingError && (
+          <button type="button" onClick={() => void sync.open('restore')}>
+            {t('load.restore')}
+          </button>
+        )}
+        {(error instanceof PlanRemovedError ||
+          error instanceof PlanMissingError ||
+          (error instanceof PlanFileGoneError && error.reason === 'trashed')) && (
+          <button type="button" onClick={() => void sync.open('new')}>
             {t('load.startNew')}
           </button>
         )}

@@ -9,9 +9,10 @@ import type { PlanDoc } from '../domain/schema';
  * (records are merged by time, so replaying it is always safe).
  */
 export interface ReplicaStore {
-  read(): PlanDoc | null;
+  /** The copy, and the storage calendar (Drive file) it was a copy of. */
+  read(): { doc: PlanDoc; calendarId?: string } | null;
   /** `unsaved`: holds changes that may not be in Drive yet. */
-  write(doc: PlanDoc, unsaved: boolean): void;
+  write(doc: PlanDoc, unsaved: boolean, calendarId?: string): void;
   hasUnsaved(): boolean;
   clear(): void;
 }
@@ -27,6 +28,7 @@ interface Stored {
   unsaved: boolean;
   doc: unknown;
   account?: ReplicaAccount;
+  calendarId?: string;
 }
 
 const PREFIX = 'vacation-planner.replica.';
@@ -39,18 +41,24 @@ export class LocalReplica implements ReplicaStore {
     private readonly store: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | null = safeLocalStorage(),
   ) {}
 
-  read(): PlanDoc | null {
-    return this.stored()?.doc ?? null;
+  read(): { doc: PlanDoc; calendarId?: string } | null {
+    const s = this.stored();
+    return s ? { doc: s.doc, ...(s.calendarId && { calendarId: s.calendarId }) } : null;
   }
 
-  write(doc: PlanDoc, unsaved: boolean) {
+  write(doc: PlanDoc, unsaved: boolean, calendarId?: string) {
     // Another tab may have written records this one hasn't seen: keep them (merge by time).
     const before = this.stored();
     const merged = before ? merge(doc, before.doc) : doc;
     // Still unsaved if this change is, or if the copy held something (another tab's) that `doc` lacks.
     const stillUnsaved = unsaved || (!!before?.unsaved && hasLocalWins(before.doc, doc));
     try {
-      const stored: Stored = { unsaved: stillUnsaved, doc: toFile(merged), ...(this.account && { account: this.account }) };
+      const stored: Stored = {
+        unsaved: stillUnsaved,
+        doc: toFile(merged),
+        ...(this.account && { account: this.account }),
+        ...((calendarId ?? before?.calendarId) && { calendarId: calendarId ?? before?.calendarId }),
+      };
       this.store?.setItem(this.key, JSON.stringify(stored));
     } catch {
       // storage full or blocked: Drive is still the copy that counts
@@ -69,12 +77,16 @@ export class LocalReplica implements ReplicaStore {
     }
   }
 
-  private stored(): { unsaved: boolean; doc: PlanDoc } | null {
+  private stored(): { unsaved: boolean; doc: PlanDoc; calendarId?: string } | null {
     try {
       const raw = this.store?.getItem(this.key);
       if (!raw) return null;
       const value = JSON.parse(raw) as Partial<Stored>;
-      return { unsaved: value.unsaved === true, doc: migrate(value.doc) };
+      return {
+        unsaved: value.unsaved === true,
+        doc: migrate(value.doc),
+        ...(typeof value.calendarId === 'string' && { calendarId: value.calendarId }),
+      };
     } catch {
       return null; // unreadable: ignore it rather than break the app
     }

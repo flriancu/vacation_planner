@@ -90,9 +90,13 @@ export class GoogleAuth {
     return this.session;
   }
 
-  /** A valid access token, or AuthExpiredError: then the user has to click "reconnect". */
-  accessToken(): string {
+  /**
+   * A valid access token, or AuthExpiredError: then the user has to click "reconnect". With
+   * `forSub`, only that account's: a storage made for one account never writes with another's.
+   */
+  accessToken(forSub?: string): string {
     if (!this.token || !this.session || Date.now() >= this.session.expiresAt) throw new AuthExpiredError();
+    if (forSub && this.session.user.sub !== forSub) throw new AuthExpiredError();
     return this.token;
   }
 

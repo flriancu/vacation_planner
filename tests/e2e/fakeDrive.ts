@@ -8,6 +8,8 @@ export class FakeDrive {
   readonly files = new Map<string, { content: unknown; version: number; trashed?: boolean }>();
   /** Writes that answer 503 before the next one succeeds. */
   failWrites = 0;
+  /** File lists that answer 503 (a load that fails). */
+  failLists = 0;
   writes = 0;
   private nextId = 1;
 
@@ -38,6 +40,10 @@ export class FakeDrive {
 
     const id = url.pathname.split('/').pop()!;
     if (url.pathname === '/drive/v3/files' && req.method() === 'GET') {
+      if (this.failLists > 0) {
+        this.failLists--;
+        return json({ error: 'backend error' }, 503);
+      }
       const trashed = url.searchParams.get('q')!.includes('trashed=true');
       const files = [...this.files].filter(([, f]) => !!f.trashed === trashed).map(([fid, f]) => ({ id: fid, version: String(f.version) }));
       return json({ files });

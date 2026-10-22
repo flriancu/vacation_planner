@@ -239,3 +239,48 @@ describe('absorb', () => {
     expect(live(out.blocks).map((x) => x.personId)).toEqual([mine.personId]);
   });
 });
+
+describe('round 4: newer records, slow clocks, other people', () => {
+  it('never lets an older readable copy overwrite a record a newer build wrote', () => {
+    const { raw, blockId, b } = file((doc) => {
+      const r = blocks(doc)[Object.keys(blocks(doc)).at(-1)!]!;
+      r.status = 'tentative';
+      r.updatedAt = '2026-10-21T00:00:00.000Z';
+    });
+    const remote = migrate(raw, Date.UTC(2026, 9, 22));
+    const olderCopy = updateRecord(b.doc, 'blocks', blockId, { status: 'planned' }, '2026-10-01T00:00:00.000Z');
+    const merged = merge(olderCopy, remote);
+    expect(merged.blocks[blockId]).toBeUndefined();
+    expect(hasLocalWins(olderCopy, remote)).toBe(false);
+    expect((toFile(merged).blocks[blockId] as unknown as { status: string }).status).toBe('tentative');
+  });
+
+  it('keeps real stamps on a device whose clock is days behind', () => {
+    const { raw, blockId } = file((doc) => (blocks(doc)[Object.keys(blocks(doc)).at(-1)!]!.updatedAt = '2026-10-22T10:00:00.000Z'));
+    expect(migrate(raw, Date.UTC(2026, 9, 12)).blocks[blockId]!.updatedAt).toBe('2026-10-22T10:00:00.000Z');
+  });
+
+  it("maps a duplicate's own person even when it was deleted", () => {
+    const mine = new DocBuilder();
+    const other = new DocBuilder();
+    const theirPerson = other.personId;
+    const block = other.block('annual', '2027-11-09');
+    other.doc = deleteRecord(other.doc, 'people', theirPerson, '2027-01-01T00:00:00.000Z');
+    other.doc = {
+      ...other.doc,
+      people: { ...other.doc.people, p2: { id: 'p2', createdAt: 'x', updatedAt: 'x', name: 'X', color: '#000', hasAccount: false } },
+    };
+    const renamed = {
+      ...other.doc,
+      people: Object.fromEntries(
+        Object.entries(other.doc.people).map(([id, p]) => [
+          id === theirPerson ? 'their' : id,
+          { ...p, id: id === theirPerson ? 'their' : id },
+        ]),
+      ),
+      blocks: { [block.id]: { ...block, personId: 'their' } },
+    };
+    const out = absorb(mine.doc, renamed);
+    expect(out.blocks[block.id]!.personId).toBe(mine.personId);
+  });
+});

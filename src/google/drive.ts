@@ -6,6 +6,8 @@ const UPLOAD = 'https://www.googleapis.com/upload/drive/v3/files';
 export const PLAN_FILE_NAME = 'vacation-planner.json';
 /** Marks files this app created, so it finds them again (`drive.file` sees only those). */
 export const APP_PROPERTY = { key: 'app', value: 'vacation_planner' };
+/** One person has one plan file, rarely two: a list longer than this many pages is broken. */
+const MAX_PAGES = 20;
 /** A call that hasn't answered by then never will: give up, so the next save can run. */
 export const CALL_TIMEOUT_MS = 30_000;
 
@@ -89,7 +91,9 @@ export async function findPlanFiles(token: string, trashed = false): Promise<Dri
   const q = `appProperties has { key='${APP_PROPERTY.key}' and value='${APP_PROPERTY.value}' } and 'me' in owners and trashed=${trashed}`;
   const out: DriveFile[] = [];
   let pageToken: string | undefined;
+  let pages = 0;
   do {
+    if (++pages > MAX_PAGES) throw new DriveError(502, 'a list of files that never ends');
     const params = new URLSearchParams({
       q,
       spaces: 'drive',
@@ -102,7 +106,8 @@ export async function findPlanFiles(token: string, trashed = false): Promise<Dri
     );
     if (!Array.isArray(body.files) || body.incompleteSearch === true) throw new DriveError(502, 'an incomplete list of files');
     for (const f of body.files as { id?: unknown; version?: unknown; ownedByMe?: unknown }[]) {
-      if (typeof f.id === 'string' && f.ownedByMe !== false) out.push({ id: f.id, version: versionOf(f) });
+      if (typeof f.id !== 'string' || !f.id) throw new DriveError(502, 'a listed file without an id');
+      if (f.ownedByMe !== false) out.push({ id: f.id, version: versionOf(f) });
     }
     pageToken = typeof body.nextPageToken === 'string' && body.nextPageToken ? body.nextPageToken : undefined;
   } while (pageToken);
