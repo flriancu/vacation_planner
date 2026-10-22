@@ -176,3 +176,22 @@ test('the last click of a selection that shakes onto the next day still ends it'
     '2027-03-10',
   );
 });
+
+test('a day under two blocks says which block each line is about, and the break once', async ({ page }) => {
+  for (const [from, to, type, status] of [
+    ['2027-12-28', '2027-12-31', 'Birou închis', 'Planificat'],
+    ['2027-12-20', '2028-01-07', null, 'Aprobat'],
+  ] as const) {
+    const dialog = await newLeave(page, from, to);
+    if (type) await dialog.getByLabel('Tip').selectOption({ label: type });
+    await dialog.getByRole('radio', { name: status }).check();
+    await dialog.getByRole('button', { name: 'Salvează' }).click();
+    await expect(dialog).toBeHidden();
+  }
+  const tip = (await cell(page, '2027-12-29').getAttribute('data-tip'))!;
+  expect(tip.split('\n')).toEqual([
+    'Birou închis (planificat): nu folosești zile de concediu',
+    'Concediu de odihnă (aprobat): folosești 9 zile de concediu',
+    expect.stringMatching(/^→ ești liber 23 de zile la rând: sâmbătă 18 decembrie 2027 – duminică 9 ianuarie 2028$/),
+  ]);
+});

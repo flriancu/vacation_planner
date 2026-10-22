@@ -13,6 +13,8 @@ export interface BlockDescription {
   spend?: string;
   /** "→ ești liber 5 zile la rând: vineri 27 noiembrie – marți 1 decembrie" */
   get: string;
+  /** The break alone, mid-sentence: "ești liber 5 zile la rând: …" (several blocks can share one). */
+  stretch: string;
   /** Both on one line, for tooltips and screen readers. */
   sentence: string;
 }
@@ -28,8 +30,8 @@ export function describeBlock({ t, plural, date }: I18n, stats: BlockStats, budg
   const key = SPEND[budget];
   if (!key) {
     const sentence = get.charAt(0).toLocaleUpperCase() + get.slice(1);
-    return { get: sentence, sentence };
+    return { get: sentence, stretch: get, sentence };
   }
   const spend = stats.cost === 0 ? t('block.spendNone') : t('block.spend', { cost: plural(key, stats.cost) });
-  return { spend, get: `→ ${get}`, sentence: `${spend} → ${get}` };
+  return { spend, get: `→ ${get}`, stretch: get, sentence: `${spend} → ${get}` };
 }

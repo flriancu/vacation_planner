@@ -14,7 +14,7 @@ import { addDays, overlaps, yearOf, type ISODate } from '../domain/dates';
 import { FIRST_YEAR, LAST_YEAR } from '../domain/holidays';
 import { live, type Block, type PlanDoc } from '../domain/schema';
 import { useI18n } from '../i18n';
-import { describeBlock } from './describe';
+import { describeBlock, type BlockDescription } from './describe';
 import { buildWeeks, clampDate, monthEdges, orderRange, outlineEdges, viewRange } from './calendarModel';
 import './calendar.css';
 
@@ -43,6 +43,9 @@ const MAX_OUTLINES = 4;
 const STEPS: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
 /** A press becomes a drag only past this distance, so a trembling click stays one day. */
 const DRAG_PX = 10;
+
+/** "Folosești …" mid-sentence, after a colon: "…: folosești …". */
+const lower = (s: string) => s.charAt(0).toLocaleLowerCase() + s.slice(1);
 
 /** The day under the pointer, if any. */
 function dayAt(ev: PointerEvent): ISODate | undefined {
@@ -78,14 +81,35 @@ export function Calendar({ year, doc, personId, today, onCreate, onOpen }: Props
   }, [doc, personId, from, to]);
   const weeks = useMemo(() => buildWeeks(from, to), [from, to]);
   // What each block costs and gives, in words: the days' tooltip and screen-reader text (CAL-7).
-  const sentences = useMemo(() => {
-    const out = new Map<string, string>();
+  const descriptions = useMemo(() => {
+    const out = new Map<string, BlockDescription>();
     for (const b of live(doc.blocks)) {
       if (b.personId !== personId || !overlaps(b.start, b.end, from, to)) continue;
-      out.set(b.id, describeBlock(i18n, blockStats(days, b), blockBudget(doc, b, yearOf(b.start))).sentence);
+      out.set(b.id, describeBlock(i18n, blockStats(days, b), blockBudget(doc, b, yearOf(b.start))));
     }
     return out;
   }, [doc, personId, days, from, to, i18n]);
+  const sentence = (b: Block) => descriptions.get(b.id)?.sentence ?? '';
+
+  /**
+   * A day's tooltip: its holiday, then one line per block saying which block it is and what it
+   * costs, then the break they make, once (blocks on the same day usually share one):
+   * "Birou închis (planificat): nu folosești zile de concediu / Concediu de odihnă (aprobat):
+   * folosești 7 zile de concediu / → ești liber 23 de zile la rând: …".
+   */
+  const tooltip = (d: ISODate, blocks: Block[]) => {
+    const lines = [holidayNames(d)];
+    const stretches = new Set<string>();
+    for (const b of blocks) {
+      const desc = descriptions.get(b.id);
+      if (!desc) continue;
+      const which = `${name(doc.leaveTypes[b.typeId]!.name)} (${lower(t(`status.${b.status}`))})`;
+      lines.push(`${which}: ${lower(desc.spend ?? t('block.spendNone'))}`);
+      stretches.add(desc.stretch);
+    }
+    for (const s of stretches) lines.push(`→ ${s}`);
+    return lines.filter(Boolean).join('\n') || undefined;
+  };
 
   const [selection, setSelection] = useState<Selection | null>(null);
   const [pending, setPending] = useState<ISODate | null>(null);
@@ -284,9 +308,7 @@ export function Calendar({ year, doc, personId, today, onCreate, onOpen }: Props
               const describe = [
                 fmt(d, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
                 ...(info.holiday?.names.map(name) ?? []),
-                ...info.blocks.map(
-                  (b) => `${name(doc.leaveTypes[b.typeId]!.name)} (${t(`status.${b.status}`)}): ${sentences.get(b.id) ?? ''}`,
-                ),
+                ...info.blocks.map((b) => `${name(doc.leaveTypes[b.typeId]!.name)} (${t(`status.${b.status}`)}): ${sentence(b)}`),
                 ...(d === today ? [t('calendar.today')] : []),
               ].join(', ');
               const classes = [
@@ -315,7 +337,7 @@ export function Calendar({ year, doc, personId, today, onCreate, onOpen }: Props
                   tabIndex={d === focusDate ? 0 : -1}
                   aria-selected={selected}
                   aria-label={describe}
-                  data-tip={[holidayNames(d), ...info.blocks.map((b) => sentences.get(b.id))].filter(Boolean).join('\n') || undefined}
+                  data-tip={tooltip(d, info.blocks)}
                   onPointerDown={(e) => onPointerDown(e, d)}
                   onPointerEnter={() => pending && setSelection({ anchor: pending, focus: d })}
                   // However a day got focus (click, script, a screen reader's cursor), arrows start from it.

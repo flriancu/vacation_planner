@@ -48,7 +48,10 @@ test('creates, approves and deletes leave (CAL-6..9, BLK-4)', async ({ page, isM
   await dialog.getByRole('button', { name: 'Salvează' }).click();
   await expect(dialog).toBeHidden();
   await expect(cell(page, '2027-08-11')).toHaveClass(/fill-planned/);
-  await expect(cell(page, '2027-08-09')).toHaveAttribute('data-tip', /Folosești 5 zile de concediu → ești liber 9 zile la rând/);
+  await expect(cell(page, '2027-08-09')).toHaveAttribute(
+    'data-tip',
+    /Concediu de odihnă \(planificat\): folosești 5 zile de concediu\n→ ești liber 9 zile la rând/,
+  );
 
   await cell(page, '2027-08-10').click();
   const edit = page.getByRole('dialog', { name: 'Editează concediul' });
