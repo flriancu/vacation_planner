@@ -1,4 +1,5 @@
-import { addDays, makeDate, weekday, type ISODate } from '../domain/dates';
+import { addDays, makeDate, overlaps, weekday, type ISODate } from '../domain/dates';
+import type { Block } from '../domain/schema';
 
 /**
  * The weeks shown for `year` (CAL-2): from the week of 15 Dec before to the
@@ -94,4 +95,30 @@ export function orderRange(a: ISODate, b: ISODate): [ISODate, ISODate] {
 
 export function clampDate(date: ISODate, from: ISODate, to: ISODate): ISODate {
   return date < from ? from : date > to ? to : date;
+}
+
+/**
+ * Outlines nest by range, not by which block owns a day: earlier start first, then the longer
+ * one, so the block that encloses another (leave around the office's closure) is outermost.
+ */
+export const byRange = (a: Block, b: Block) => a.start.localeCompare(b.start) || b.end.localeCompare(a.end) || a.id.localeCompare(b.id);
+
+/**
+ * Each block's nesting level (0 = outermost), the same on every day it covers, so its outline
+ * steps in by the same amount everywhere and stays one closed shape (CAL-6). In `byRange`
+ * order, each block takes the lowest level that no block overlapping it has taken: an
+ * enclosing block is outer, and two blocks that only partly overlap keep their levels from
+ * one day to the next instead of swapping places where one of them begins.
+ */
+export function nestLevels(blocks: readonly Block[]): Map<string, number> {
+  const levels = new Map<string, number>();
+  const placed: Block[] = [];
+  for (const b of [...blocks].sort(byRange)) {
+    const taken = new Set(placed.filter((p) => overlaps(p.start, p.end, b.start, b.end)).map((p) => levels.get(p.id)));
+    let level = 0;
+    while (taken.has(level)) level++;
+    levels.set(b.id, level);
+    placed.push(b);
+  }
+  return levels;
 }

@@ -11,13 +11,13 @@ describe('blockStats (CAL-7)', () => {
   it('counts working days and the whole break around the block', () => {
     const b = new DocBuilder();
     const block = b.block('annual', '2027-08-09', '2027-08-13', 'planned'); // Mon–Fri before Sun 15 Aug
-    expect(stats(b, block.id)).toEqual({ cost: 5, gain: 9, breakStart: '2027-08-07', breakEnd: '2027-08-15' });
+    expect(stats(b, block.id)).toEqual({ cost: 5, covered: 0, gain: 9, breakStart: '2027-08-07', breakEnd: '2027-08-15' });
   });
 
   it('costs an idea as if accepted, without charging days already covered', () => {
     const b = demo2027();
     const idea = b.block('annual', '2027-12-24', '2027-12-31', 'idea'); // swap + office-closed days already cover all but 27 Dec
-    expect(stats(b, idea.id)).toMatchObject({ cost: 1, gain: 10, breakEnd: '2028-01-02' });
+    expect(stats(b, idea.id)).toMatchObject({ cost: 1, covered: 5, gain: 10, breakEnd: '2028-01-02' });
   });
 
   it('charges only the days where a planned block is the top block', () => {

@@ -100,9 +100,8 @@ test('leave around an office closure is outlined outside it, the closure inside'
   // The closure owns the day, but the leave that encloses it is drawn outermost.
   const outlines = cell(page, '2027-08-11').locator('.outline');
   await expect(outlines).toHaveCount(2);
-  await expect(outlines.nth(0)).toHaveClass(/st-approved/);
-  await expect(outlines.nth(0)).toHaveAttribute('style', /--i: 0/);
-  await expect(outlines.nth(1)).toHaveAttribute('style', /--c: var\(--free-edge\); --i: 1/);
+  await expect(outlines.and(page.locator('.st-approved'))).toHaveAttribute('style', /--i: 0/);
+  await expect(outlines.and(page.locator('.st-planned'))).toHaveAttribute('style', /--c: var\(--free-edge\); --i: 1/);
   // The outline turns at the top left of Thu 12 (row 1 starts on Thu 5): the corner is drawn.
   await expect(cell(page, '2027-08-12').locator('.outline.st-approved .corner.tl')).toHaveCount(1);
 });

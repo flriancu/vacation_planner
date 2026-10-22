@@ -21,6 +21,9 @@ export function Tooltips() {
     let showTimer: number | undefined;
     let hideTimer: number | undefined;
     let pressing = false;
+    // The shown element's text may change while it shows (another tab switches the language,
+    // a plan reloads): the tooltip follows it.
+    const watch = new MutationObserver(() => target && isOpen() && place(target));
 
     const isOpen = () => (topLayer ? el.matches(':popover-open') : el.classList.contains('open'));
 
@@ -33,10 +36,13 @@ export function Tooltips() {
       const r = t.getBoundingClientRect();
       const w = el.offsetWidth;
       const h = el.offsetHeight;
-      const top = r.top - h - GAP >= GAP ? r.top - h - GAP : r.bottom + GAP;
+      // Above if it fits, else below if it fits, else as low as it can go and still be whole.
+      const top = r.top - h - GAP >= GAP ? r.top - h - GAP : Math.max(GAP, Math.min(r.bottom + GAP, window.innerHeight - h - GAP));
       const left = Math.max(GAP, Math.min(r.left + r.width / 2 - w / 2, window.innerWidth - w - GAP));
       el.style.top = `${top}px`;
       el.style.left = `${left}px`;
+      watch.disconnect();
+      watch.observe(t, { attributes: true, attributeFilter: ['data-tip'] });
     };
 
     const hide = (delay: number) => {
@@ -44,6 +50,7 @@ export function Tooltips() {
       window.clearTimeout(hideTimer);
       hideTimer = window.setTimeout(() => {
         target = null;
+        watch.disconnect();
         if (!isOpen()) return;
         if (topLayer) el.hidePopover();
         else el.classList.remove('open');
@@ -102,6 +109,7 @@ export function Tooltips() {
     document.addEventListener('keydown', onKey, true);
     window.addEventListener('scroll', onScroll, true);
     return () => {
+      watch.disconnect();
       window.clearTimeout(showTimer);
       window.clearTimeout(hideTimer);
       document.removeEventListener('pointerover', onOver);

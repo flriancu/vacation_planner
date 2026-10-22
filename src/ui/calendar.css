@@ -176,25 +176,58 @@
   pointer-events: none;
 }
 
+/* Keyboard focus: an outline painted over everything in the day (lines, outlines, the
+   together mark), with a ring of the page colour inside it, so it shows on any fill, even
+   where the focus colour is the leave colour. */
 .day:focus-visible {
   z-index: 3;
-  box-shadow: inset 0 0 0 2px var(--focus);
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 4px var(--surface);
 }
 
-/* Stepped month separator (CAL-3). Neutral and dashed, so it never looks like a leave outline. */
+/* Stepped month separator (CAL-3): long neutral dashes, so it never reads as an idea's short
+   dashes. Drawn as a background, not a border, so the day's inside (where outlines sit)
+   keeps its size on every day. */
+.day.m-top,
+.day.m-left {
+  background-repeat: no-repeat;
+}
+
 .day.m-top {
-  border-top: 2px dashed var(--month-line);
+  background-image: repeating-linear-gradient(to right, var(--month-line) 0 10px, transparent 10px 15px);
+  background-size: 100% 2px;
+  background-position: top left;
 }
 
 .day.m-left {
-  border-left: 2px dashed var(--month-line);
+  background-image: repeating-linear-gradient(to bottom, var(--month-line) 0 10px, transparent 10px 15px);
+  background-size: 2px 100%;
+  background-position: top left;
+}
+
+.day.m-top.m-left {
+  background-image:
+    repeating-linear-gradient(to right, var(--month-line) 0 10px, transparent 10px 15px),
+    repeating-linear-gradient(to bottom, var(--month-line) 0 10px, transparent 10px 15px);
+  background-size:
+    100% 2px,
+    2px 100%;
+  background-position:
+    top left,
+    top left;
 }
 
 /* Block outlines: one layer per block, edges only where the block ends (CAL-6). Nested
-   outlines step in 3 px, but only on the sides where they have an edge: elsewhere they run to
-   the day's border, so a line carries on into the next day without a gap. */
+   outlines step in one level per block around them (calendarModel.nestLevels), but only on
+   the sides where they have an edge: elsewhere they run to the day's border, so a line carries
+   on into the next day without a gap. */
+.calendar {
+  --step: 3px;
+}
+
 .outline {
-  --in: calc(var(--i, 0) * 3px);
+  --in: calc(var(--i, 0) * var(--step));
   --w: 2px;
   position: absolute;
   inset: 0;
@@ -273,6 +306,7 @@
 @media (max-width: 700px) {
   .calendar {
     --row-h: 2.6rem;
+    --step: 2px;
   }
 
   .week {
@@ -301,19 +335,28 @@
   margin: 0;
 }
 
+/* One slot per person, the same on every day, with or without a line in it: line 1 on top. */
 .lines {
+  --pitch: 5px;
   position: absolute;
+  z-index: 1;
   left: 0;
   right: 0;
   bottom: 4px;
-  display: grid;
-  gap: 3px;
+  height: calc(var(--n) * var(--pitch));
   pointer-events: none;
 }
 
+/* Neutral ink on every fill, with a thin edge of the page colour so it stands out on the
+   leave fill too (one ink, not white on some days and grey on others). */
 .line {
-  --ink: color-mix(in srgb, var(--fg) 72%, transparent);
+  --ink: color-mix(in srgb, var(--fg) 80%, transparent);
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc((var(--n) - 1 - var(--k)) * var(--pitch));
   height: 0;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--surface) 85%, transparent);
 }
 
 .line.st-idea {
@@ -325,46 +368,35 @@
 }
 
 .line.st-approved {
-  border-top: 4px solid var(--ink);
-}
-
-.lines-3 .line.st-approved,
-.lines-4 .line.st-approved {
-  border-top-width: 3px;
-}
-
-.lines-4 {
-  gap: 2px;
+  border-top: 3px solid var(--ink);
 }
 
 .line.start {
-  margin-left: 4px;
+  left: 4px;
 }
 
 .line.end {
-  margin-right: 4px;
+  right: 4px;
 }
 
-.day.fill-approved .line {
-  --ink: var(--leave-fg);
-}
-
-/* Everyone off together: a line along the top of those days, thicker when it's all approved.
-   Above the outlines (it would hide under a block's top edge), with a thin edge of the page
-   colour below it, so it stands out on the leave fill too. */
+/* Everyone shown and I off together: a double line along the top of those days (a shape no
+   outline has), thicker when all of it is approved. Neutral ink with an edge of the page
+   colour, above the outlines (it would hide under a block's top edge). */
 .together {
   position: absolute;
   z-index: 2;
-  top: 0;
+  top: 1px;
   left: 0;
   right: 0;
-  border-top: 3px solid var(--accent);
-  box-shadow: 0 1px 0 var(--surface);
+  border-top: 5px double var(--fg);
+  box-shadow:
+    0 1px 0 var(--surface),
+    0 -1px 0 var(--surface);
   pointer-events: none;
 }
 
 .together.st-planned {
-  border-top-width: 2px;
+  border-top-width: 3px;
 }
 
 /* Windows High Contrast and other forced colours replace every fill with the system background,
@@ -399,5 +431,39 @@
   .swatch.base-holiday {
     forced-color-adjust: none;
     background-color: GrayText;
+  }
+  /* Gradients are dropped: month separators go back to borders, dotted (ideas are dashed). */
+  .day.m-top {
+    border-top: 2px dotted GrayText;
+  }
+  .day.m-left {
+    border-left: 2px dotted GrayText;
+  }
+  /* One system colour per kind of line: outlines in the text colour, people in grey, the
+     together mark in the highlight; on approved days (the highlight) the highlight's text colour. */
+  .outline,
+  .line,
+  .together {
+    forced-color-adjust: none;
+  }
+  .outline {
+    border-color: CanvasText;
+  }
+  .line {
+    --ink: GrayText;
+    box-shadow: none;
+  }
+  .together {
+    border-top-color: Highlight;
+    box-shadow: none;
+  }
+  .fill-approved .outline,
+  .fill-approved .line,
+  .fill-approved .together {
+    --ink: HighlightText;
+    border-color: HighlightText;
+  }
+  .day:focus-visible {
+    outline-color: Highlight;
   }
 }

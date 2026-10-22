@@ -25,7 +25,7 @@ export function CalendarExportDialog({
   year: number;
   onClose: () => void;
 }) {
-  const { t, name, plural } = useI18n();
+  const { t, name, plural, lang } = useI18n();
   const [chosenYear, setYear] = useState(year);
   const [statuses, setStatuses] = useState<BlockStatus[]>(['planned', 'approved']);
   const blocks = blocksForCalendar(doc, personId, chosenYear, statuses);
@@ -36,7 +36,7 @@ export function CalendarExportDialog({
       start: b.start,
       end: b.end,
       // The leave type, and the status while it isn't settled: "Concediu de odihnă (planificat)".
-      summary: `${name(doc.leaveTypes[b.typeId]!.name)}${b.status === 'approved' ? '' : ` (${t(`status.${b.status}`).toLocaleLowerCase()})`}`,
+      summary: `${doc.leaveTypes[b.typeId] ? name(doc.leaveTypes[b.typeId]!.name) : t('type.unknown')}${b.status === 'approved' ? '' : ` (${t(`status.${b.status}`).toLocaleLowerCase(lang)})`}`,
       ...(b.note && { description: b.note }),
       confirmed: b.status === 'approved',
       updatedAt: b.updatedAt,
@@ -99,11 +99,11 @@ export function ImportDialog({
   onAdd: () => void;
   onClose: () => void;
 }) {
-  const { t, plural } = useI18n();
+  const { t, plural, lang } = useI18n();
   const s: BackupSummary = summarize(copy);
   const parts = (['approved', 'planned', 'idea'] as const)
     .filter((st) => s.byStatus[st] > 0)
-    .map((st) => `${t(`status.${st}`).toLocaleLowerCase()}: ${s.byStatus[st]}`)
+    .map((st) => `${t(`status.${st}`).toLocaleLowerCase(lang)}: ${s.byStatus[st]}`)
     .join(', ');
   return (
     <Dialog title={t('import.title')} onClose={onClose}>

@@ -20,7 +20,7 @@ export interface BlockDescription {
 }
 
 /** Plain-language summary of what a block costs and the break it gives. */
-export function describeBlock({ t, plural, date }: I18n, stats: BlockStats, budget: Budget): BlockDescription {
+export function describeBlock({ t, plural, date, lang }: I18n, stats: BlockStats, budget: Budget): BlockDescription {
   // Full names, no abbreviations; the year only when the break crosses New Year.
   // The weekday is formatted on its own: Romanian Intl would put a comma after it.
   const withYear = stats.breakStart.slice(0, 4) !== stats.breakEnd.slice(0, 4);
@@ -29,9 +29,15 @@ export function describeBlock({ t, plural, date }: I18n, stats: BlockStats, budg
   const get = stats.gain === 1 ? t('block.getOne', { range }) : t('block.get', { days: plural('days', stats.gain), range });
   const key = SPEND[budget];
   if (!key) {
-    const sentence = get.charAt(0).toLocaleUpperCase() + get.slice(1);
+    const sentence = get.charAt(0).toLocaleUpperCase(lang) + get.slice(1);
     return { get: sentence, stretch: get, sentence };
   }
-  const spend = stats.cost === 0 ? t('block.spendNone') : t('block.spend', { cost: plural(key, stats.cost) });
+  // Nothing to pay because other leave already takes the days: say so, or it reads as free.
+  const spend =
+    stats.cost > 0
+      ? t('block.spend', { cost: plural(key, stats.cost) })
+      : stats.covered > 0
+        ? t('block.spendCovered')
+        : t('block.spendNone');
   return { spend, get: `→ ${get}`, stretch: get, sentence: `${spend} → ${get}` };
 }

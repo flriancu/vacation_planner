@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { weekday } from '../../src/domain/dates';
-import { buildWeeks, monthEdges, outlineEdges, viewRange } from '../../src/ui/calendarModel';
+import type { Block } from '../../src/domain/schema';
+import { buildWeeks, monthEdges, nestLevels, outlineEdges, viewRange } from '../../src/ui/calendarModel';
 
 describe('viewRange (CAL-2)', () => {
   it('runs Monday to Sunday from mid-December before to mid-January after', () => {
@@ -61,5 +62,25 @@ describe('monthEdges (CAL-3)', () => {
     expect(monthEdges('2027-09-06')).toEqual({ top: true, left: false }); // Monday after: still the first row of September
     expect(monthEdges('2027-09-08')).toEqual({ top: false, left: false });
     expect(monthEdges('2027-08-31')).toEqual({ top: false, left: false });
+  });
+});
+
+const block = (id: string, start: string, end: string) => ({ id, start, end }) as Block;
+
+describe('nestLevels (CAL-6)', () => {
+  it('puts an enclosing block outside, and keeps each level the same on every day', () => {
+    // Planned Mon 8 – Fri 12 March; an idea Wed 10 – Wed 17 only partly overlaps it.
+    const levels = nestLevels([block('idea', '2027-03-10', '2027-03-17'), block('leave', '2027-03-08', '2027-03-12')]);
+    expect(levels.get('leave')).toBe(0);
+    expect(levels.get('idea')).toBe(1); // also on 15–17, where the leave has ended
+  });
+
+  it('reuses a level once the block holding it has ended', () => {
+    const levels = nestLevels([
+      block('a', '2027-03-01', '2027-03-31'),
+      block('b', '2027-03-02', '2027-03-04'),
+      block('c', '2027-03-10', '2027-03-12'),
+    ]);
+    expect([levels.get('a'), levels.get('b'), levels.get('c')]).toEqual([0, 1, 1]);
   });
 });

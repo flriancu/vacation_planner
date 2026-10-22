@@ -1,11 +1,12 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState, type FormEvent, type SyntheticEvent } from 'react';
 import { blockStats } from '../domain/blocks';
 import { blockBudget, buildDays, findOverlaps, fullOfIdeas, MAX_IDEAS_PER_DAY } from '../domain/calendar';
-import { addDays, overlaps, yearOf, type ISODate } from '../domain/dates';
+import { addDays, daysBetween, overlaps, yearOf, type ISODate } from '../domain/dates';
 import { updateRecord } from '../domain/edit';
 import { addRecord, live, STATUS_RANK, typeByKey, type Block, type BlockStatus, type PlanDoc } from '../domain/schema';
 import { swapHolidaysFor } from '../domain/swaps';
 import { useI18n } from '../i18n';
+import type { OtherPerson } from './Calendar';
 import { looksFree } from './calendarModel';
 import { describeBlock } from './describe';
 import { DateRangeFields } from './DateRangeFields';
@@ -28,6 +29,8 @@ interface Props {
   target: EditorTarget;
   doc: PlanDoc;
   personId: string;
+  /** The people I follow, to say who else is off on the chosen days (the tooltip's job, which phones can't show). */
+  others?: readonly OtherPerson[];
   onSave: (draft: Draft) => void;
   onDelete: (blockId: string) => void;
   onSwitch: (blockId: string) => void;
@@ -50,9 +53,11 @@ const sameDraft = (a: Draft, b: Draft) =>
   a.typeId === b.typeId && a.status === b.status && a.start === b.start && a.end === b.end && a.note === b.note && a.swapFor === b.swapFor;
 
 /** Create or edit one block: type, status, dates, note (CAL-8, CAL-9, BLK-*). */
-export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch, onClose }: Props) {
+export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch, onClose, others = [] }: Props) {
   const i18n = useI18n();
-  const { t, name, date: fmt } = i18n;
+  const { t, name, plural, lang, date: fmt } = i18n;
+  // In the UI's language, not the system's (a Turkish system would make "idee" into "ıdee").
+  const lower = (s: string) => s.toLocaleLowerCase(lang);
   const dialog = useRef<HTMLDialogElement>(null);
   const title = useRef<HTMLHeadingElement>(null);
   const [initial] = useState(() => initialDraft(target, doc));
@@ -75,7 +80,9 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
   }, []);
 
   const types = live(doc.leaveTypes).filter((lt) => !lt.hidden || lt.id === draft.typeId);
-  const type = doc.leaveTypes[draft.typeId]!;
+  // A block whose type this plan doesn't have (only from a damaged file) is edited as annual leave.
+  const known = doc.leaveTypes[draft.typeId];
+  const type = known ?? typeByKey(doc, 'annual')!;
   const valid = draft.start !== '' && draft.end !== '' && draft.start <= draft.end;
 
   // BLK-4: types without approval stop at "planned"; an existing block moves one stage at a time,
@@ -135,10 +142,20 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
       ? live(doc.blocks).filter((b) => b.personId === personId && b.id !== original.id && overlaps(b.start, b.end, draft.start, draft.end))
       : [];
 
+  // Who I follow is off on some of these days, and how sure their least sure day is.
+  const othersOff = valid
+    ? others.flatMap((o) => {
+        const days = daysBetween(draft.start, draft.end).flatMap((d) => o.days.get(d) ?? []);
+        if (days.length === 0) return [];
+        const status = days.reduce((low, d) => (STATUS_RANK[d.status] < STATUS_RANK[low] ? d.status : low), days[0]!.status);
+        return [{ id: o.id, name: o.name, days: days.length, status }];
+      })
+    : [];
+
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
 
   const changeType = (typeId: string) => {
-    const next = doc.leaveTypes[typeId]!;
+    const next = doc.leaveTypes[typeId] ?? type;
     let status = draft.status;
     if (!next.needsApproval && status === 'approved') {
       status = 'planned';
@@ -213,7 +230,7 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
             icon: <BlockSwatch status={draft.status} free={looksFree(lt.key)} />,
           }))}
           onChange={changeType}
-          missing={t('editor.typeDeleted', { name: name(type.name) })}
+          missing={known ? t('editor.typeDeleted', { name: name(known.name) }) : t('type.unknown')}
         />
 
         <fieldset className="statuses">
@@ -285,6 +302,19 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
           {original?.status === 'approved' && datesChanged && <span className="warning">{t('editor.warnApprovedDates')}</span>}
         </p>
 
+        {othersOff.length > 0 && (
+          <div className="also-here" data-testid="others-off">
+            {t('editor.othersOff')}
+            <ul>
+              {othersOff.map((o) => (
+                <li key={o.id}>
+                  {t('editor.otherOff', { name: o.name, days: plural('days', o.days), status: lower(t(`status.${o.status}`)) })}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {alsoHere.length > 0 && (
           <div className="also-here">
             {t('editor.alsoHere')}
@@ -292,8 +322,8 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
               {alsoHere.map((b) => (
                 <li key={b.id}>
                   <button type="button" className="link" onClick={() => leave(() => onSwitch(b.id))}>
-                    {name(doc.leaveTypes[b.typeId]!.name)} ({t(`status.${b.status}`)}), {fmt(b.start, { day: 'numeric', month: 'long' })} –{' '}
-                    {fmt(b.end, { day: 'numeric', month: 'long' })}
+                    {doc.leaveTypes[b.typeId] ? name(doc.leaveTypes[b.typeId]!.name) : t('type.unknown')} ({t(`status.${b.status}`)}),{' '}
+                    {fmt(b.start, { day: 'numeric', month: 'long' })} – {fmt(b.end, { day: 'numeric', month: 'long' })}
                   </button>
                 </li>
               ))}

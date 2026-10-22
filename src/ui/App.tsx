@@ -482,6 +482,7 @@ function Planner({ doc, sync, storage, saveState, saveError, notices, account }:
           target={editor}
           doc={doc}
           personId={personId}
+          others={others}
           onSave={save}
           onDelete={remove}
           onSwitch={(blockId) => setEditor({ mode: 'edit', blockId })}

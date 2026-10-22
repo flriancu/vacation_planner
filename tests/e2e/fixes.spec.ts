@@ -194,8 +194,8 @@ test('a day under two blocks says which block each line is about, and the break 
   }
   const tip = (await cell(page, '2027-12-29').getAttribute('data-tip'))!;
   expect(tip.split('\n')).toEqual([
-    'Birou închis (planificat): nu folosești zile de concediu',
-    'Concediu de odihnă (aprobat): folosești 9 zile de concediu',
+    'Birou închis (planificat), 28 – 31 decembrie: nu folosești zile de concediu',
+    'Concediu de odihnă (aprobat), 20 decembrie – 7 ianuarie: folosești 9 zile de concediu',
     expect.stringMatching(/^→ ești liber 23 de zile la rând: sâmbătă 18 decembrie 2027 – duminică 9 ianuarie 2028$/),
   ]);
 });

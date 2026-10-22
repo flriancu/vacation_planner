@@ -16,7 +16,7 @@ import type { LeaveDay } from '../domain/people';
 import { live, type Block, type PlanDoc } from '../domain/schema';
 import { useI18n } from '../i18n';
 import { describeBlock, type BlockDescription } from './describe';
-import { buildWeeks, clampDate, looksFree, monthEdges, orderRange, outlineEdges, viewRange } from './calendarModel';
+import { buildWeeks, clampDate, looksFree, monthEdges, nestLevels, orderRange, outlineEdges, viewRange } from './calendarModel';
 import './calendar.css';
 
 /** Someone whose plan I follow, as the calendar draws them: one line under each day (PPL-4). */
@@ -48,24 +48,18 @@ interface Selection {
   focus: ISODate;
 }
 
-/** Outlines drawn per day; more would crowd into the number (the tooltip still lists every block). */
-const MAX_OUTLINES = 4;
-/** People drawn as lines under a day; a phone-sized day holds no more (the tooltip names everyone). */
-export const MAX_PEOPLE = 4;
-
 /**
- * Outlines are nested by range, not by which block owns the day: the block that encloses
- * another (leave around the office's closure) is drawn outermost. Earlier start first, then
- * the longer one, so a block keeps the same place on every day it covers.
+ * Nesting levels drawn per day: leave, an office closure inside it and three ideas (BLK-5) is
+ * the most the rules allow. Deeper ones (only from merges) share the innermost level; the
+ * tooltip still lists every block.
  */
-const byRange = (a: Block, b: Block) => a.start.localeCompare(b.start) || b.end.localeCompare(a.end) || a.id.localeCompare(b.id);
+const MAX_OUTLINES = 5;
+/** People drawn as lines under a day; a phone-sized day holds no more. The People panel lists everyone. */
+export const MAX_PEOPLE = 4;
 
 const STEPS: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
 /** A press becomes a drag only past this distance, so a trembling click stays one day. */
 const DRAG_PX = 10;
-
-/** "Folosești …" mid-sentence, after a colon: "…: folosești …". */
-const lower = (s: string) => s.charAt(0).toLocaleLowerCase() + s.slice(1);
 
 /** The day under the pointer, if any. */
 function dayAt(ev: PointerEvent): ISODate | undefined {
@@ -85,6 +79,8 @@ function dayAt(ev: PointerEvent): ISODate | undefined {
 export function Calendar({ year, doc, personId, today, others = [], together, onCreate, onOpen }: Props) {
   const i18n = useI18n();
   const { t, date: fmt, name } = i18n;
+  /** "Folosești …" mid-sentence, after a colon: "…: folosești …" (in the UI's language, not the system's). */
+  const lower = (s: string) => s.charAt(0).toLocaleLowerCase(i18n.lang) + s.slice(1);
   const { from, to } = viewRange(year);
 
   // The view plus 40 days each side for the breaks around it, stretched to whole blocks, so a
@@ -109,28 +105,45 @@ export function Calendar({ year, doc, personId, today, others = [], together, on
     }
     return out;
   }, [doc, personId, days, from, to, i18n]);
-  const sentence = (b: Block) => descriptions.get(b.id)?.sentence ?? '';
+  // Each block's outline level, the same on every day it covers (calendarModel.nestLevels).
+  const levels = useMemo(
+    () => nestLevels(live(doc.blocks).filter((b) => b.personId === personId && overlaps(b.start, b.end, from, to))),
+    [doc, personId, from, to],
+  );
+
+  /** "3 – 7 august", "28 decembrie – 7 ianuarie", or one day: which block a line is about when several cover a day. */
+  const span = (b: Block) => {
+    const end = fmt(b.end, { day: 'numeric', month: 'long' });
+    if (b.start === b.end) return end;
+    const sameMonth = b.start.slice(0, 7) === b.end.slice(0, 7);
+    return `${fmt(b.start, sameMonth ? { day: 'numeric' } : { day: 'numeric', month: 'long' })} – ${end}`;
+  };
+  const typeName = (b: Block) => (doc.leaveTypes[b.typeId] ? name(doc.leaveTypes[b.typeId]!.name) : t('type.unknown'));
 
   /**
-   * A day's tooltip: its holiday, then one line per block saying which block it is and what it
-   * costs, then the break they make, once (blocks on the same day usually share one):
-   * "Birou închis (planificat): nu folosești zile de concediu / Concediu de odihnă (aprobat):
-   * folosești 7 zile de concediu / → ești liber 23 de zile la rând: …".
+   * What a day says, as lines (the tooltip, and the screen-reader label after the date): its
+   * holiday, then one line per block (which block, its days when there are several, what it
+   * costs), then the break: once when the blocks share it (they usually do), else under each
+   * block. Then the people I follow, and whether everyone shown is off.
+   * "Birou închis (planificat), 24 – 31 decembrie: nu folosești zile de concediu / Concediu de
+   * odihnă (aprobat), 20 – 31 decembrie: folosești 7 zile de concediu / → ești liber 23 de zile la rând: …".
    */
-  const tooltip = (d: ISODate, blocks: Block[]) => {
+  const dayLines = (d: ISODate, blocks: Block[]) => {
     const lines = [holidayNames(d)];
-    const stretches = new Set<string>();
-    for (const b of blocks) {
+    const described = blocks.flatMap((b) => {
       const desc = descriptions.get(b.id);
-      if (!desc) continue;
-      const which = `${name(doc.leaveTypes[b.typeId]!.name)} (${lower(t(`status.${b.status}`))})`;
+      return desc ? [{ b, desc }] : [];
+    });
+    const shared = new Set(described.map((x) => x.desc.stretch)).size <= 1;
+    for (const { b, desc } of described) {
+      const which = `${typeName(b)} (${lower(t(`status.${b.status}`))})${described.length > 1 ? `, ${span(b)}` : ''}`;
       lines.push(`${which}: ${lower(desc.spend ?? t('block.spendNone'))}`);
-      stretches.add(desc.stretch);
+      if (!shared) lines.push(`→ ${desc.stretch}`);
     }
-    for (const s of stretches) lines.push(`→ ${s}`);
+    if (shared && described[0]) lines.push(`→ ${described[0].desc.stretch}`);
     lines.push(...othersOn(d));
     if (together?.has(d)) lines.push(t('calendar.together'));
-    return lines.filter(Boolean).join('\n') || undefined;
+    return lines.filter((l): l is string => !!l);
   };
 
   /** "Ana: Concediu de odihnă (aprobat)", for each person I follow who has leave on `d`. */
@@ -335,12 +348,11 @@ export function Calendar({ year, doc, personId, today, others = [], together, on
               const firm = info.blocks.find((b) => b.status !== 'idea');
               const me = monthEdges(d);
               const selected = !!selection && d >= selStart && d <= selEnd;
+              const said = dayLines(d, info.blocks);
+              // Screen readers hear what the tooltip says, after the full date.
               const describe = [
                 fmt(d, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
-                ...(info.holiday?.names.map(name) ?? []),
-                ...info.blocks.map((b) => `${name(doc.leaveTypes[b.typeId]!.name)} (${t(`status.${b.status}`)}): ${sentence(b)}`),
-                ...othersOn(d),
-                ...(together?.has(d) ? [t('calendar.together')] : []),
+                ...said,
                 ...(d === today ? [t('calendar.today')] : []),
               ].join(', ');
               const classes = [
@@ -370,7 +382,7 @@ export function Calendar({ year, doc, personId, today, others = [], together, on
                   tabIndex={d === focusDate ? 0 : -1}
                   aria-selected={selected}
                   aria-label={describe}
-                  data-tip={tooltip(d, info.blocks)}
+                  data-tip={said.join('\n') || undefined}
                   onPointerDown={(e) => onPointerDown(e, d)}
                   onPointerEnter={() => pending && setSelection({ anchor: pending, focus: d })}
                   // However a day got focus (click, script, a screen reader's cursor), arrows start from it.
@@ -382,34 +394,36 @@ export function Calendar({ year, doc, personId, today, others = [], together, on
                   </span>
                   {together?.has(d) && <span className={`together st-${together.get(d)}`} aria-hidden="true" />}
                   {others.length > 0 && (
-                    <span className={`lines lines-${Math.min(others.length, MAX_PEOPLE)}`} aria-hidden="true">
-                      {others.slice(0, MAX_PEOPLE).map((o) => {
+                    // Each person's line has its own slot, the same on every day, empty or not (PPL-4).
+                    <span className="lines" style={{ '--n': Math.min(others.length, MAX_PEOPLE) } as CSSProperties} aria-hidden="true">
+                      {others.slice(0, MAX_PEOPLE).map((o, k) => {
                         const day = o.days.get(d);
                         return (
-                          <span
-                            key={o.id}
-                            className={day ? `line st-${day.status}${day.start ? ' start' : ''}${day.end ? ' end' : ''}` : 'line'}
-                          />
+                          day && (
+                            <span
+                              key={o.id}
+                              className={`line st-${day.status}${day.start ? ' start' : ''}${day.end ? ' end' : ''}`}
+                              style={{ '--k': k } as CSSProperties}
+                            />
+                          )
                         );
                       })}
                     </span>
                   )}
-                  {[...info.blocks]
-                    .sort(byRange)
-                    .slice(0, MAX_OUTLINES)
-                    .map((b, i) => {
-                      const e = outlineEdges(d, b.start, b.end);
-                      return (
-                        <span
-                          key={b.id}
-                          className={`outline st-${b.status}${e.top ? ' e-t' : ''}${e.right ? ' e-r' : ''}${e.bottom ? ' e-b' : ''}${e.left ? ' e-l' : ''}`}
-                          style={{ '--c': typeColor(b), '--i': i } as CSSProperties}
-                          aria-hidden="true"
-                        >
-                          {(['tl', 'tr', 'bl', 'br'] as const).map((k) => e.corners[k] && <span key={k} className={`corner ${k}`} />)}
-                        </span>
-                      );
-                    })}
+                  {info.blocks.map((b) => {
+                    const e = outlineEdges(d, b.start, b.end);
+                    const level = Math.min(levels.get(b.id) ?? 0, MAX_OUTLINES - 1);
+                    return (
+                      <span
+                        key={b.id}
+                        className={`outline st-${b.status}${e.top ? ' e-t' : ''}${e.right ? ' e-r' : ''}${e.bottom ? ' e-b' : ''}${e.left ? ' e-l' : ''}`}
+                        style={{ '--c': typeColor(b), '--i': level } as CSSProperties}
+                        aria-hidden="true"
+                      >
+                        {(['tl', 'tr', 'bl', 'br'] as const).map((k) => e.corners[k] && <span key={k} className={`corner ${k}`} />)}
+                      </span>
+                    );
+                  })}
                 </div>
               );
             })}
