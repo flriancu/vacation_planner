@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
-import { addFromBackup, readBackup, summarize, toBackup } from '../domain/backup';
+import { addCopy, planCopy, readBackup, toBackup } from '../domain/backup';
 import { nextStamp } from '../domain/clock';
 import { yearOf, type ISODate } from '../domain/dates';
 import { deleteRecord, restoreRecord, updateRecord } from '../domain/edit';
@@ -8,7 +8,7 @@ import { ownPerson } from '../domain/people';
 import { addRecord, live, newPlanDoc, STATUS_RANK, type Block, type PlanDoc, type RecordContext } from '../domain/schema';
 import { AuthExpiredError } from '../google/auth';
 import { PlanFileGoneError } from '../google/drive';
-import { I18nProvider, useI18n, type Lang } from '../i18n';
+import { I18nProvider, useI18n, type Lang, type MessageKey } from '../i18n';
 import { canShare } from '../storage/Sharing';
 import type { Storage } from '../storage/Storage';
 import { PlanMissingError, PlanRemovedError, type DocumentSync } from '../sync/DocumentSync';
@@ -340,25 +340,31 @@ function Planner({ doc, sync, storage, saveState, saveError, notices, account }:
   const [dataDialog, setDataDialog] = useState<
     { kind: 'calendar' } | { kind: 'share' } | { kind: 'import'; copy: PlanDoc; name: string } | null
   >(null);
-  const [dataNote, setDataNote] = useState<string | null>(null);
+  // Kept as words to translate, so a language switch translates the note too.
+  const [dataNote, setDataNote] = useState<{ key: MessageKey; count?: number; reason?: MessageKey } | null>(null);
   const data = {
-    exportPlan: () => saveFile(`plan-concedii-${localToday()}.json`, toBackup(doc), 'application/json'),
+    exportPlan: () => saveFile(t('file.copy', { date: localToday() }), toBackup(doc), 'application/json'),
     importPlan: () =>
-      void pickFile('.json,application/json').then((file) => {
-        if (!file) return;
-        try {
-          setDataDialog({ kind: 'import', copy: readBackup(file.text), name: file.name });
-        } catch (e) {
-          setDataNote(t('import.error', { reason: t(errorMessage(e)) }));
-        }
-      }),
+      void pickFile('.json,application/json').then(
+        (file) => {
+          if (!file) return;
+          try {
+            setDataDialog({ kind: 'import', copy: readBackup(file.text), name: file.name });
+          } catch (e) {
+            setDataNote({ key: 'import.error', reason: errorMessage(e) });
+          }
+        },
+        () => setDataNote({ key: 'import.error', reason: 'err.unreadableFile' }),
+      ),
     exportCalendar: () => setDataDialog({ kind: 'calendar' }),
     ...(account.kind === 'google' && canShare(storage) && { share: () => setDataDialog({ kind: 'share' }) }),
   };
-  const addCopy = (copy: PlanDoc) => {
+  const addFromCopy = (copy: PlanDoc) => {
     setDataDialog(null);
-    update((d) => addFromBackup(d, copy));
-    setDataNote(t('import.done', { count: plural('leaves', summarize(copy).blocks) }));
+    const added = planCopy(doc, copy, personId).blocks.length;
+    // Worked out again on the plan as it is when the change applies (another tab may have added since).
+    update((d) => addCopy(d, planCopy(d, copy, personId), recordContext(d)));
+    setDataNote({ key: 'import.done', count: added });
   };
 
   // The people whose plans I follow (PPL-3, PPL-4): one line each under my days, in a fixed order.
@@ -414,7 +420,7 @@ function Planner({ doc, sync, storage, saveState, saveError, notices, account }:
       ))}
       {dataNote && (
         <Notice scope="page" onClose={() => setDataNote(null)} closeLabel={t('strip.close')}>
-          <p>{dataNote}</p>
+          <p>{t(dataNote.key, { count: plural('leaves', dataNote.count ?? 0), reason: dataNote.reason ? t(dataNote.reason) : '' })}</p>
         </Notice>
       )}
 
@@ -469,9 +475,9 @@ function Planner({ doc, sync, storage, saveState, saveError, notices, account }:
       )}
       {dataDialog?.kind === 'import' && (
         <ImportDialog
-          copy={dataDialog.copy}
+          plan={planCopy(doc, dataDialog.copy, personId)}
           fileName={dataDialog.name}
-          onAdd={() => addCopy(dataDialog.copy)}
+          onAdd={() => addFromCopy(dataDialog.copy)}
           onClose={() => setDataDialog(null)}
         />
       )}

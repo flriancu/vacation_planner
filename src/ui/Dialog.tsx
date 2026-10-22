@@ -15,15 +15,26 @@ interface Props {
 export function Dialog({ title, children, onClose }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
+  /** Where the focus was when it opened: it goes back there when it closes (WCAG 2.4.3). */
+  const opener = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
+    opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     heading.current?.setAttribute('autofocus', '');
     const d = dialog.current;
     if (d && !d.open) d.showModal();
   }, []);
 
   return (
-    <dialog ref={dialog} className="editor" aria-labelledby="dialog-title" onClose={onClose}>
+    <dialog
+      ref={dialog}
+      className="editor"
+      aria-labelledby="dialog-title"
+      onClose={() => {
+        onClose();
+        if (opener.current?.isConnected) opener.current.focus();
+      }}
+    >
       <div className="dialog-body">
         <h2 id="dialog-title" ref={heading} tabIndex={-1}>
           {title}

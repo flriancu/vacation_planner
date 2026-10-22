@@ -12,6 +12,8 @@ export interface IcsEvent {
   description?: string;
   /** Approved leave is settled; ideas and planned leave may still change. */
   confirmed: boolean;
+  /** Shown as busy time; an idea is not (others can still book me then). */
+  busy: boolean;
   updatedAt: Stamp;
 }
 
@@ -29,14 +31,15 @@ export const eventUid = (block: Block) => `${block.id}@${UID_DOMAIN}`;
 
 /**
  * An iCalendar file (RFC 5545) with one all-day event per entry: CRLF line ends, text escaped,
- * long lines folded at 75 bytes. SEQUENCE follows the block's last change, so calendar apps
- * that track it take a re-import as an update.
+ * long lines folded at 75 bytes. SEQUENCE follows the block's last change (in minutes, which
+ * fit the 32-bit number calendar apps keep for millennia), so apps that track it take a
+ * re-import as an update. `lang` is the language of the file's text (PRODID).
  */
-export function toIcs(events: readonly IcsEvent[], calendarName: string, now: Date): string {
+export function toIcs(events: readonly IcsEvent[], calendarName: string, now: Date, lang: 'ro' | 'en' = 'ro'): string {
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    `PRODID:-//${UID_DOMAIN}//Planificator de concediu//RO`,
+    `PRODID:-//${UID_DOMAIN}//${lang === 'ro' ? 'Planificator de concediu//RO' : 'Vacation planner//EN'}`,
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
     `X-WR-CALNAME:${text(calendarName)}`,
@@ -47,13 +50,13 @@ export function toIcs(events: readonly IcsEvent[], calendarName: string, now: Da
       `UID:${text(e.uid)}`,
       `DTSTAMP:${stamp(now.toISOString())}`,
       `LAST-MODIFIED:${stamp(e.updatedAt)}`,
-      `SEQUENCE:${Math.max(0, Math.floor(Date.parse(e.updatedAt) / 1000) || 0)}`,
+      `SEQUENCE:${Math.max(0, Math.floor(Date.parse(e.updatedAt) / 60_000) || 0)}`,
       `DTSTART;VALUE=DATE:${day(e.start)}`,
       `DTEND;VALUE=DATE:${day(addDays(e.end, 1))}`,
       `SUMMARY:${text(e.summary)}`,
       ...(e.description ? [`DESCRIPTION:${text(e.description)}`] : []),
       `STATUS:${e.confirmed ? 'CONFIRMED' : 'TENTATIVE'}`,
-      'TRANSP:OPAQUE',
+      `TRANSP:${e.busy ? 'OPAQUE' : 'TRANSPARENT'}`,
       'END:VEVENT',
     );
   }
@@ -72,13 +75,20 @@ function stamp(s: Stamp): string {
     .replace(/\.\d{3}/, '');
 }
 
-/** TEXT values: backslash, semicolon, comma and line ends are escaped (RFC 5545 §3.3.11). */
+/**
+ * TEXT values: backslash, semicolon, comma and line ends are escaped (RFC 5545 §3.3.11); other
+ * control characters, which TEXT can't hold, are left out.
+ */
 function text(s: string): string {
-  return s
-    .replace(/\\/g, '\\\\')
-    .replace(/;/g, '\\;')
-    .replace(/,/g, '\\,')
-    .replace(/\r\n|\r|\n/g, '\\n');
+  return (
+    s
+      // oxlint-disable-next-line no-control-regex
+      .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '')
+      .replace(/\\/g, '\\\\')
+      .replace(/;/g, '\\;')
+      .replace(/,/g, '\\,')
+      .replace(/\r\n|\r|\n/g, '\\n')
+  );
 }
 
 const utf8 = new TextEncoder();

@@ -22,7 +22,7 @@ function parse(text: string): unknown {
   try {
     return JSON.parse(text);
   } catch {
-    throw new UnsupportedPlanError('The plan file is not valid JSON.');
+    throw new UnsupportedPlanError('The plan file is not valid JSON.', 'json');
   }
 }
 

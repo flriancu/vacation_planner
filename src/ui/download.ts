@@ -11,19 +11,16 @@ export function saveFile(name: string, text: string, type: string) {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
-/** Lets the user pick one file; resolves with its text, or null when nothing was picked. */
+/** Lets the user pick one file; resolves with its text, or null when nothing was picked; rejects when it can't be read. */
 export function pickFile(accept: string): Promise<{ name: string; text: string } | null> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = accept;
     input.addEventListener('change', () => {
       const file = input.files?.[0];
       if (!file) return resolve(null);
-      file.text().then(
-        (text) => resolve({ name: file.name, text }),
-        () => resolve(null),
-      );
+      file.text().then((text) => resolve({ name: file.name, text }), reject);
     });
     input.addEventListener('cancel', () => resolve(null));
     input.click();

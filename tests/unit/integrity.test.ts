@@ -284,3 +284,25 @@ describe('round 4: newer records, slow clocks, other people', () => {
     expect(out.blocks[block.id]!.personId).toBe(mine.personId);
   });
 });
+
+describe('records no real plan has (adversarial fixes)', () => {
+  it('drops a record nested deeper than any real one, so the plan can always be written back', () => {
+    const b = new DocBuilder();
+    const block = b.block('annual', '2027-03-01', '2027-03-01', 'planned');
+    const text = JSON.stringify(toFile(b.doc)).replace(
+      `"id":"${block.id}",`,
+      `"id":"${block.id}","extra":${'{"d":'.repeat(5000)}1${'}'.repeat(5000)},`,
+    );
+    const doc = migrate(JSON.parse(text));
+    expect(doc.blocks[block.id]).toBeUndefined();
+    expect(() => JSON.stringify(toFile(doc), null, 2)).not.toThrow();
+  });
+
+  it('keeps only flat fields of a deletion', () => {
+    const b = new DocBuilder();
+    const block = b.block('annual', '2027-03-01', '2027-03-01', 'planned');
+    const raw = toFile(deleteRecord(b.doc, 'blocks', block.id, nextStamp(b.doc))) as unknown as { blocks: Record<string, object> };
+    raw.blocks[block.id] = { ...raw.blocks[block.id], extra: { a: { b: 1 } } };
+    expect(migrate(raw).blocks[block.id]).not.toHaveProperty('extra');
+  });
+});

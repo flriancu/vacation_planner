@@ -10,6 +10,7 @@ const event = (patch: Partial<IcsEvent> = {}): IcsEvent => ({
   end: '2027-03-10',
   summary: 'Concediu de odihnă',
   confirmed: true,
+  busy: true,
   updatedAt: '2027-02-01T09:30:00.000Z',
   ...patch,
 });
@@ -63,5 +64,16 @@ describe('blocksForCalendar', () => {
     b.block('annual', '2029-01-10', '2029-01-10', 'approved');
     expect(blocksForCalendar(b.doc, b.personId, 2028, ['planned', 'approved'])).toEqual([c, a]);
     expect(eventUid(a)).toBe(`${a.id}@concediu.floriniancu.ro`);
+  });
+
+  it('leaves out control characters TEXT cannot hold, and keeps line ends', () => {
+    const ics = toIcs([event({ description: 'a\u0000b\u0007c\u000bd\te\nf' })], 'x', NOW);
+    expect(ics).toContain('DESCRIPTION:abcd\te\\nf');
+  });
+
+  it('shows ideas as free time, and keeps SEQUENCE a 32-bit number for centuries', () => {
+    const ics = toIcs([event({ busy: false })], 'x', NOW);
+    expect(ics).toContain('TRANSP:TRANSPARENT');
+    expect(sequence('2400-01-01T00:00:00.000Z')).toBeLessThan(2 ** 31);
   });
 });

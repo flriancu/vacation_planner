@@ -11,7 +11,9 @@ export function errorMessage(e: unknown): MessageKey {
   if (e instanceof PlanMissingError) return 'err.missingCopy';
   if (e instanceof PlanFileGoneError) return e.reason === 'trashed' ? 'err.removed' : 'err.missing';
   if (e instanceof OtherOwnerError) return 'err.owner';
-  if (e instanceof UnsupportedPlanError) return 'err.unsupported';
+  if (e instanceof UnsupportedPlanError) {
+    return ({ json: 'err.json', notPlan: 'err.notPlan', version: 'err.version', tooBig: 'err.fileTooBig' } as const)[e.reason];
+  }
   if (e instanceof SaveConflictError) return 'err.conflict';
   if (e instanceof DriveError) {
     if (e.status === 0) return 'err.network';

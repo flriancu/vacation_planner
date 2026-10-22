@@ -15,6 +15,18 @@ interface Props {
  */
 /** The open menu's close, so opening another closes it: one panel at a time. */
 let closeOpen: (() => void) | null = null;
+let openTrigger: HTMLButtonElement | null = null;
+
+/**
+ * Closes the open menu and puts the focus on its button: for an action in a menu that opens
+ * a dialog, so the dialog doesn't open over a menu left open, and focus has somewhere to come
+ * back to when it closes (WCAG 2.4.3).
+ */
+export function closeMenu() {
+  const button = openTrigger;
+  closeOpen?.();
+  button?.focus();
+}
 
 export function Menu({ label, button, buttonClassName, children }: Props) {
   const [open, setOpen] = useState(false);
@@ -27,6 +39,7 @@ export function Menu({ label, button, buttonClassName, children }: Props) {
     const close = () => setOpen(false);
     if (closeOpen !== close) closeOpen?.();
     closeOpen = close;
+    openTrigger = trigger.current;
     const onPointer = (e: PointerEvent) => {
       if (!root.current?.contains(e.target as Node)) setOpen(false);
     };
@@ -38,7 +51,10 @@ export function Menu({ label, button, buttonClassName, children }: Props) {
     document.addEventListener('pointerdown', onPointer);
     document.addEventListener('keydown', onKey);
     return () => {
-      if (closeOpen === close) closeOpen = null;
+      if (closeOpen === close) {
+        closeOpen = null;
+        openTrigger = null;
+      }
       document.removeEventListener('pointerdown', onPointer);
       document.removeEventListener('keydown', onKey);
     };

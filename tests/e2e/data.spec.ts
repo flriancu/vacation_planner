@@ -47,10 +47,15 @@ test('a saved copy of the plan can be added back', async ({ page }) => {
   await settingsAction(page, 'Adaugă dintr-o copie…');
   await (await choosing).setFiles(file);
   const preview = page.getByRole('dialog', { name: 'Adaugă dintr-o copie' });
-  await expect(preview).toContainText('Copia are un concediu în 2027 (planificat: 1).');
-  await preview.getByRole('button', { name: 'Adaugă la planul meu' }).click();
-  // The copy is older than the delete, so the delete stands: adding never undoes what I did since.
-  await expect(page.getByText('Am adăugat copia la planul tău')).toBeVisible();
+  // A copy adds only what is new: the leave I deleted since doesn't come back, and it says why.
+  await expect(preview).toContainText('Nu e nimic nou de adăugat din această copie.');
+  await expect(preview).toContainText('Nu se adaugă: deja în planul tău sau șterse din el: 1.');
+  await expect(preview.getByRole('button', { name: 'Adaugă la planul meu' })).toBeDisabled();
+  // Closed, it gives the focus back to Settings, and the menu isn't left open behind it.
+  await page.keyboard.press('Escape');
+  await expect(preview).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Setări' })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Salvează o copie a planului' })).toBeHidden();
 });
 
 test('a copy is added to a plan that never had it', async ({ page }) => {
@@ -104,7 +109,7 @@ test('a file that is not a plan says so', async ({ page }) => {
   const choosing = page.waitForEvent('filechooser');
   await settingsAction(page, 'Adaugă dintr-o copie…');
   await (await choosing).setFiles({ name: 'x.json', mimeType: 'application/json', buffer: Buffer.from('{"hello": 1}') });
-  await expect(page.getByText('Fișierul nu e o copie a unui plan.')).toBeVisible();
+  await expect(page.getByText('Fișierul nu e o copie a unui plan. E un fișier JSON, dar nu e un plan.')).toBeVisible();
 });
 
 test('the year exports as a calendar file, planned and approved by default', async ({ page }) => {

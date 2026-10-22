@@ -3,7 +3,7 @@ import { useI18n } from '../i18n';
 import type { Account } from './account';
 import { errorMessage } from './errors';
 import { LangSwitch } from './LangSwitch';
-import { Menu } from './Menu';
+import { closeMenu, Menu } from './Menu';
 import { SCHEMES, type Mode, type SchemeId } from './theme';
 import type { SaveState } from './useDocument';
 import type { WidthClass } from './useLayout';
@@ -143,17 +143,45 @@ function SettingsControls({ theme, data }: { theme: ThemeControls; data: DataAct
       </div>
       <div className="data-actions" role="group" aria-label={t('data.label')}>
         <span className="data-label">{t('data.label')}</span>
-        <button type="button" className="link" onClick={data.exportPlan}>
+        <button
+          type="button"
+          className="link"
+          onClick={() => {
+            closeMenu();
+            data.exportPlan();
+          }}
+        >
           {t('data.exportPlan')}
         </button>
-        <button type="button" className="link" onClick={data.importPlan}>
+        <button
+          type="button"
+          className="link"
+          onClick={() => {
+            closeMenu();
+            data.importPlan();
+          }}
+        >
           {t('data.importPlan')}
         </button>
-        <button type="button" className="link" onClick={data.exportCalendar}>
+        <button
+          type="button"
+          className="link"
+          onClick={() => {
+            closeMenu();
+            data.exportCalendar();
+          }}
+        >
           {t('data.exportCalendar')}
         </button>
         {data.share && (
-          <button type="button" className="link" onClick={data.share}>
+          <button
+            type="button"
+            className="link"
+            onClick={() => {
+              closeMenu();
+              data.share!();
+            }}
+          >
             {t('share.action')}
           </button>
         )}

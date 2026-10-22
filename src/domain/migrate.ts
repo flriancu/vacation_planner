@@ -12,7 +12,17 @@ import {
   type Settings,
 } from './schema';
 
-export class UnsupportedPlanError extends Error {}
+/** Why a file can't be read as a plan: not JSON, not a plan, another schema version, too big. */
+export type UnsupportedReason = 'json' | 'notPlan' | 'version' | 'tooBig';
+
+export class UnsupportedPlanError extends Error {
+  constructor(
+    message: string,
+    readonly reason: UnsupportedReason = 'notPlan',
+  ) {
+    super(message);
+  }
+}
 
 /** For records repaired here: older than anything real, so any real edit wins a merge against them. */
 const EPOCH = '1970-01-01T00:00:00.000Z';
@@ -88,9 +98,11 @@ const VALID: { [K in keyof Collections]: (r: Raw, types: ReadonlySet<string>) =>
  */
 export function migrate(raw: unknown, now: number = Date.now()): PlanDoc {
   if (!isObject(raw)) throw new UnsupportedPlanError('The plan file is not a JSON object.');
+  if (raw.schemaVersion === undefined) throw new UnsupportedPlanError('The file has no schema version: it is not a plan.');
   if (raw.schemaVersion !== SCHEMA_VERSION) {
     throw new UnsupportedPlanError(
       `The plan file has schema version ${String(raw.schemaVersion)}; this app reads version ${SCHEMA_VERSION}.`,
+      'version',
     );
   }
   if (!isObject(raw.owner) || !isText(raw.owner.googleSub) || !isObject(raw.settings)) {
@@ -107,6 +119,9 @@ export function migrate(raw: unknown, now: number = Date.now()): PlanDoc {
     const kept: Record<string, Meta> = {};
     const set: Raw = { ...(isObject(raw.skipped) && isObject(raw.skipped[key]) ? raw.skipped[key] : {}) };
     for (const [id, record] of Object.entries(source)) {
+      // Deeper than any real record: only a hand-made file nests like this, and some browsers
+      // can't even write it back (JSON.stringify runs out of stack), so it is dropped, not kept.
+      if (deeperThan(record, MAX_DEPTH)) continue;
       if (!isObject(record) || (record.id !== undefined && record.id !== id)) {
         put(set, id, record);
         continue;
@@ -117,7 +132,8 @@ export function migrate(raw: unknown, now: number = Date.now()): PlanDoc {
         updatedAt: stamp(record.updatedAt, now),
       };
       const valid = VALID[key](record, types);
-      if (record.deleted === true) put(kept, id, { ...record, ...meta, deleted: true });
+      // A deletion keeps only flat fields (which record it was): nothing nested rides along.
+      if (record.deleted === true) put(kept, id, { ...flat(record), ...meta, deleted: true });
       else if (valid) put(kept, id, { ...record, ...meta });
       else put(set, id, record);
       if (key === 'leaveTypes' && valid) types.add(id);
@@ -129,6 +145,25 @@ export function migrate(raw: unknown, now: number = Date.now()): PlanDoc {
   else delete out.skipped;
 
   return withEssentials(out as PlanDoc);
+}
+
+/** Records nest a few levels at most (a leave type's names); this is far past any real one. */
+const MAX_DEPTH = 32;
+
+/** Whether `value` nests more than `limit` levels, found without recursion (it may be very deep). */
+function deeperThan(value: unknown, limit: number): boolean {
+  let level: unknown[] = [value];
+  for (let depth = 0; level.length; depth++) {
+    if (depth > limit) return true;
+    level = level.flatMap((v) => (v !== null && typeof v === 'object' ? Object.values(v) : []));
+  }
+  return false;
+}
+
+function flat(record: Raw): Raw {
+  const out: Raw = {};
+  for (const [k, v] of Object.entries(record)) if (v === null || typeof v !== 'object') put(out, k, v);
+  return out;
 }
 
 function readSettings(s: Raw, now: number): Settings {
