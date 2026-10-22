@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { addFromBackup, readBackup, summarize, toBackup } from '../domain/backup';
 import { nextStamp } from '../domain/clock';
 import { yearOf, type ISODate } from '../domain/dates';
 import { deleteRecord, restoreRecord, updateRecord } from '../domain/edit';
@@ -16,6 +17,8 @@ import { Calendar } from './Calendar';
 import { viewRange } from './calendarModel';
 import { DemoStrip } from './DemoStrip';
 import { errorDetail, errorMessage } from './errors';
+import { CalendarExportDialog, ImportDialog } from './DataDialogs';
+import { saveFile, pickFile } from './download';
 import { Header } from './Header';
 import { Notice } from './Notice';
 import { SidePane } from './SidePane';
@@ -24,7 +27,7 @@ import { Tooltips } from './Tooltips';
 import { UndoToast, type UndoOffer } from './UndoToast';
 import { useHideOnScroll, useWidthClass } from './useLayout';
 import { useDocument, type SaveState, type SyncNotice } from './useDocument';
-import { useToday } from './useToday';
+import { localToday, useToday } from './useToday';
 import './app.css';
 
 const LANG_KEY = 'vacation-planner.lang';
@@ -326,6 +329,28 @@ function Planner({ doc, sync, saveState, saveError, notices, account }: PlannerP
     document.documentElement.style.scrollPaddingTop = `${(hidden ? 0 : height) + 40}px`;
   }, [hidden, height]);
 
+  // The plan's data (Settings): a copy to keep, a copy to add, a calendar file (IO-2, IO-4).
+  const [dataDialog, setDataDialog] = useState<{ kind: 'calendar' } | { kind: 'import'; copy: PlanDoc; name: string } | null>(null);
+  const [dataNote, setDataNote] = useState<string | null>(null);
+  const data = {
+    exportPlan: () => saveFile(`plan-concedii-${localToday()}.json`, toBackup(doc), 'application/json'),
+    importPlan: () =>
+      void pickFile('.json,application/json').then((file) => {
+        if (!file) return;
+        try {
+          setDataDialog({ kind: 'import', copy: readBackup(file.text), name: file.name });
+        } catch (e) {
+          setDataNote(t('import.error', { reason: t(errorMessage(e)) }));
+        }
+      }),
+    exportCalendar: () => setDataDialog({ kind: 'calendar' }),
+  };
+  const addCopy = (copy: PlanDoc) => {
+    setDataDialog(null);
+    update((d) => addFromBackup(d, copy));
+    setDataNote(t('import.done', { count: plural('leaves', summarize(copy).blocks) }));
+  };
+
   const noticeText = (n: SyncNotice) =>
     n.kind === 'carried'
       ? t('notice.carried', { count: plural('leaves', n.count) })
@@ -345,6 +370,7 @@ function Planner({ doc, sync, saveState, saveError, notices, account }: PlannerP
         saveError={saveError}
         flush={sync.flush}
         theme={{ scheme, setScheme, mode, setMode }}
+        data={data}
         width={width}
         hidden={hidden}
       />
@@ -354,6 +380,11 @@ function Planner({ doc, sync, saveState, saveError, notices, account }: PlannerP
           <p>{noticeText(n)}</p>
         </Notice>
       ))}
+      {dataNote && (
+        <Notice scope="page" onClose={() => setDataNote(null)} closeLabel={t('strip.close')}>
+          <p>{dataNote}</p>
+        </Notice>
+      )}
 
       <main className="layout" tabIndex={-1}>
         {width !== 'expanded' && <SidePane width={width} />}
@@ -377,6 +408,18 @@ function Planner({ doc, sync, saveState, saveError, notices, account }: PlannerP
 
       <UndoToast offer={undo} onDone={clearUndo} />
       <Tooltips />
+
+      {dataDialog?.kind === 'calendar' && (
+        <CalendarExportDialog doc={doc} personId={personId} year={year} onClose={() => setDataDialog(null)} />
+      )}
+      {dataDialog?.kind === 'import' && (
+        <ImportDialog
+          copy={dataDialog.copy}
+          fileName={dataDialog.name}
+          onAdd={() => addCopy(dataDialog.copy)}
+          onClose={() => setDataDialog(null)}
+        />
+      )}
 
       {editor && (
         <BlockEditor

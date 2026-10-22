@@ -26,6 +26,21 @@
   font-size: 1.1rem;
 }
 
+/* Dialog.tsx: the same layout as the editor's form, for dialogs without one. */
+.editor .dialog-body {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.editor .dialog-body p {
+  margin: 0;
+}
+
+.editor .dialog-help {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
 .editor label {
   display: grid;
   gap: 0.2rem;

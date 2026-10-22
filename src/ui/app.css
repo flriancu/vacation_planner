@@ -149,6 +149,20 @@ button.square {
   gap: 0.6rem;
 }
 
+/* Settings: the plan's data, below the look-and-language choices. */
+.data-actions {
+  display: grid;
+  justify-items: start;
+  gap: 0.35rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--line);
+  font-size: var(--ctl-font);
+}
+
+.data-actions .data-label {
+  color: var(--muted);
+}
+
 .picker {
   display: grid;
   grid-template-columns: 6.5rem 1fr;

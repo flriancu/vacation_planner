@@ -8,6 +8,13 @@ import { SCHEMES, type Mode, type SchemeId } from './theme';
 import type { SaveState } from './useDocument';
 import type { WidthClass } from './useLayout';
 
+/** Saving and adding copies of the plan, and the calendar export (IO-2, IO-4). */
+export interface DataActions {
+  exportPlan: () => void;
+  importPlan: () => void;
+  exportCalendar: () => void;
+}
+
 export interface ThemeControls {
   scheme: SchemeId;
   setScheme: (s: SchemeId) => void;
@@ -27,6 +34,7 @@ interface Props {
   saveError: unknown;
   flush: () => Promise<void>;
   theme: ThemeControls;
+  data: DataActions;
   width: WidthClass;
   hidden: boolean;
 }
@@ -38,12 +46,12 @@ interface Props {
  * the account menu, or a ⋯ menu when signed out.
  */
 export const Header = forwardRef<HTMLElement, Props>(function Header(
-  { year, setYear, minYear, maxYear, onToday, account, saveState, saveError, flush, theme, width, hidden },
+  { year, setYear, minYear, maxYear, onToday, account, saveState, saveError, flush, theme, data, width, hidden },
   ref,
 ) {
   const { t } = useI18n();
   const compact = width === 'compact';
-  const settings = <SettingsControls theme={theme} />;
+  const settings = <SettingsControls theme={theme} data={data} />;
 
   return (
     <header ref={ref} className={`app-header${hidden ? ' is-hidden' : ''}`}>
@@ -103,7 +111,7 @@ function initialOf(text: string): string {
   return graphemes.segment(upper)[Symbol.iterator]().next().value?.segment ?? first;
 }
 
-function SettingsControls({ theme }: { theme: ThemeControls }) {
+function SettingsControls({ theme, data }: { theme: ThemeControls; data: DataActions }) {
   const { t } = useI18n();
   return (
     <div className="settings">
@@ -130,6 +138,18 @@ function SettingsControls({ theme }: { theme: ThemeControls }) {
       <div className="picker">
         <span>{t('lang.label')}</span>
         <LangSwitch />
+      </div>
+      <div className="data-actions" role="group" aria-label={t('data.label')}>
+        <span className="data-label">{t('data.label')}</span>
+        <button type="button" className="link" onClick={data.exportPlan}>
+          {t('data.exportPlan')}
+        </button>
+        <button type="button" className="link" onClick={data.importPlan}>
+          {t('data.importPlan')}
+        </button>
+        <button type="button" className="link" onClick={data.exportCalendar}>
+          {t('data.exportCalendar')}
+        </button>
       </div>
     </div>
   );

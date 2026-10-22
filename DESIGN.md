@@ -37,6 +37,7 @@ src/
     suggest.ts       bridge candidates + ranking   (SUG-1, 2, 7, 8)
     plan.ts          full-year plan proposal   (SUG-4)
     ics.ts           .ics export   (IO-2)
+    backup.ts        a copy of the plan as a file, read back and added to a plan   (IO-4)
     schema.ts        document types (§3), schemaVersion
     migrate.ts       migrate(doc) → doc, one step per version
     merge.ts         record-by-record merge (§4.3)
@@ -57,8 +58,6 @@ src/
     drive.ts         find / create / read / write the plan file
     calendar.ts      event upsert / delete   (IO-3)
     picker.ts        v2
-  import/
-    xlsxSheet.ts     old sheet → preview of classifications → records   (IO-1)
   i18n/              ro.ts, en.ts, index.ts (useT hook)
   ui/                App, Calendar (+ calendarModel.ts: pure layout helpers), BlockEditor,
                      Legend, useDocument (connects DocumentSync to React and page events),
@@ -336,7 +335,7 @@ The excused balance uses the same formulas with its quota and no adjustments; it
 2. **Calendar UI** on MemoryStorage: view, blocks, editor, i18n, first end-to-end tests, CI + Pages deploy (demo mode). *Done 2026-10-21; the demo is editable in memory until sign-in exists.*
 3. **Google:** sign-in, DriveStorage, merge on conflict, save status. *Done 2026-10-21; hardened 2026-10-22 after adversarial testing (§4.5).*
 4. **Planning:** balance panel, swap reminders, suggestions panel, plan proposal.
-5. **Import and export:** xlsx import, .ics, Calendar push.
+5. **Import and export:** plan copies (save, add from a copy: IO-4), the old sheet through a private script into a copy (IO-1), `.ics` export (IO-2). *Done 2026-10-22. Calendar push (IO-3) deferred.*
 6. **v2:** people, following others' files with the Picker, overlay, overlap finder, school holidays.
 
 ## 10. Risks
