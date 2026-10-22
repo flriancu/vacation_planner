@@ -1,47 +1,81 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { useI18n } from '../i18n';
+import { displayName } from '../domain/text';
+import { useI18n, type MessageKey } from '../i18n';
+import { isRetryable, needsSignIn } from '../storage/Storage';
 import type { SharedWith, Sharing } from '../storage/Sharing';
 import { Dialog } from './Dialog';
-import { errorMessage } from './errors';
+
+/** Longest email address there can be (RFC 5321). */
+const MAX_EMAIL = 254;
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** What went wrong while sharing, in the user's words. Nothing here retries by itself, so none says so. */
+function shareError(e: unknown): MessageKey {
+  if (needsSignIn(e)) return 'err.auth';
+  if (isRetryable(e)) return 'share.errLater';
+  const status = (e as { status?: unknown } | null)?.status;
+  if (status === 400) return 'share.errAddress';
+  if (status === 403) return 'share.errRefused';
+  return 'share.errLater';
+}
+
+interface Note {
+  key: MessageKey;
+  email?: string;
+}
 
 /**
  * Share my plan, read-only (PPL-3): add someone by email, see who has it, stop sharing. They
- * then follow it from their own app (People → Follow a plan).
+ * then follow it from their own app (People → Follow a plan). The list shows every kind of
+ * access the file has, not only what this dialog gave, so "shared with nobody" is true.
  */
-export function ShareDialog({ sharing, calendarId, onClose }: { sharing: Sharing; calendarId: string; onClose: () => void }) {
+export function ShareDialog({
+  sharing,
+  calendarId,
+  myEmail,
+  onSignIn,
+  onClose,
+}: {
+  sharing: Sharing;
+  calendarId: string;
+  myEmail?: string;
+  onSignIn?: () => void;
+  onClose: () => void;
+}) {
   const { t } = useI18n();
   const [email, setEmail] = useState('');
-  const [list, setList] = useState<readonly SharedWith[] | null>(null);
+  const [list, setList] = useState<readonly SharedWith[] | 'failed' | null>(null);
   const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState<string | null>(null);
+  const [note, setNote] = useState<Note | null>(null);
 
   const reload = useCallback(
     () =>
       sharing.sharedWith(calendarId).then(setList, (e: unknown) => {
-        setList([]);
-        setNote(t(errorMessage(e)));
+        setList('failed');
+        setNote({ key: shareError(e) });
       }),
-    [sharing, calendarId, t],
+    [sharing, calendarId],
   );
   useEffect(() => void reload(), [reload]);
 
   const add = (e: FormEvent) => {
     e.preventDefault();
     const address = email.trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) {
-      setNote(t('share.invalid'));
-      return;
-    }
+    if (address.length > MAX_EMAIL || !EMAIL.test(address)) return setNote({ key: 'share.invalid' });
+    const same = (other?: string) => other?.toLowerCase() === address.toLowerCase();
+    if (same(myEmail)) return setNote({ key: 'share.self' });
+    if (Array.isArray(list) && list.some((s) => same(s.email))) return setNote({ key: 'share.already', email: address });
     setBusy(true);
     sharing
       .share(calendarId, address)
       .then(
         () => {
-          setEmail('');
-          setNote(t('share.done', { email: address }));
+          // Only the address that was shared is cleared: one typed meanwhile stays.
+          setEmail((now) => (now.trim() === address ? '' : now));
+          setNote({ key: 'share.done', email: address });
           return reload();
         },
-        (err: unknown) => setNote(t(errorMessage(err))),
+        (err: unknown) => setNote({ key: shareError(err) }),
       )
       .finally(() => setBusy(false));
   };
@@ -50,8 +84,20 @@ export function ShareDialog({ sharing, calendarId, onClose }: { sharing: Sharing
     setBusy(true);
     sharing
       .unshare(calendarId, s.id)
-      .then(reload, (err: unknown) => setNote(t(errorMessage(err))))
+      .then(reload, (err: unknown) => setNote({ key: shareError(err) }))
       .finally(() => setBusy(false));
+  };
+
+  const who = (s: SharedWith) => {
+    const base =
+      s.kind === 'anyone'
+        ? t('share.anyone')
+        : s.kind === 'domain'
+          ? t('share.domain', { domain: s.domain ?? '' })
+          : s.name
+            ? `${displayName(s.name)} (${s.email})`
+            : (s.email ?? '');
+    return s.role === 'reader' ? base : `${base} — ${t(s.role === 'commenter' ? 'share.canComment' : 'share.canEdit')}`;
   };
 
   return (
@@ -60,7 +106,16 @@ export function ShareDialog({ sharing, calendarId, onClose }: { sharing: Sharing
       <form className="share-form" onSubmit={add}>
         <label>
           {t('share.email')}
-          <input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <input
+            type="email"
+            autoComplete="email"
+            maxLength={MAX_EMAIL}
+            value={email}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              if (note?.key === 'share.done' || note?.key === 'share.invalid') setNote(null);
+            }}
+          />
         </label>
         <button type="submit" className="primary" disabled={busy || !email.trim()}>
           {t('share.add')}
@@ -68,17 +123,34 @@ export function ShareDialog({ sharing, calendarId, onClose }: { sharing: Sharing
       </form>
       {note && (
         <p className="summary" role="status">
-          {note}
+          {t(note.key, { email: note.email ?? '' })}
+          {note.key === 'err.auth' && onSignIn && (
+            <>
+              {' '}
+              <button type="button" className="link" onClick={onSignIn}>
+                {t('people.signInAction')}
+              </button>
+            </>
+          )}
         </p>
       )}
       <div>
-        <p className="dialog-help">{list === null ? t('save.loading') : list.length ? t('share.with') : t('share.none')}</p>
-        {list && list.length > 0 && (
+        {list === 'failed' ? (
+          <p className="dialog-help">
+            {t('share.listFailed')}{' '}
+            <button type="button" className="link" onClick={() => void reload()}>
+              {t('share.retry')}
+            </button>
+          </p>
+        ) : (
+          <p className="dialog-help">{list === null ? t('save.loading') : list.length ? t('share.with') : t('share.none')}</p>
+        )}
+        {Array.isArray(list) && list.length > 0 && (
           <ul className="shares">
             {list.map((s) => (
               <li key={s.id}>
-                <span>{s.name ? `${s.name} (${s.email})` : s.email}</span>
-                <button type="button" onClick={() => stop(s)} disabled={busy} aria-label={t('share.stopLabel', { email: s.email })}>
+                <span>{who(s)}</span>
+                <button type="button" onClick={() => stop(s)} disabled={busy} aria-label={t('share.stopLabel', { email: who(s) })}>
                   {t('share.stop')}
                 </button>
               </li>

@@ -164,3 +164,46 @@ test('sharing my plan: add someone, see them, stop', async ({ page }) => {
   await dialog.getByRole('button', { name: 'Nu mai împărți planul cu mihai@example.test' }).click();
   await expect(dialog).toContainText('Planul nu e împărțit cu nimeni.');
 });
+
+test('the share dialog tells the truth about who has the plan', async ({ page }) => {
+  const drive = new FakeDrive();
+  drive.failShareLists = 1;
+  drive.otherAccess.push(
+    { id: 'link', type: 'anyone', role: 'reader' },
+    { id: 'boss', type: 'user', role: 'writer', emailAddress: 'boss@example.test' },
+  );
+  await open(page, drive);
+  await page.getByRole('button', { name: 'Setări' }).click();
+  await page.getByRole('button', { name: 'Împarte planul…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Împarte planul' });
+  // A list that couldn't be read is never "shared with nobody".
+  await expect(dialog).toContainText('Nu s-a putut afla cu cine e împărțit planul.');
+  await expect(dialog).not.toContainText('nu e împărțit cu nimeni');
+  await dialog.getByRole('button', { name: 'Încearcă din nou' }).click();
+  // Access given in Drive shows too, and what more than reading it allows.
+  await expect(dialog.locator('.shares')).toContainText('Oricine are linkul');
+  await expect(dialog.locator('.shares')).toContainText('boss@example.test — poate și modifica');
+  // My own address, and one that already has it, are not sent to Google.
+  await dialog.getByLabel('Adresa de e-mail').fill('ana@example.test');
+  await dialog.getByRole('button', { name: 'Împarte', exact: true }).click();
+  await expect(dialog).toContainText('Aceasta e adresa ta');
+  await dialog.getByLabel('Adresa de e-mail').fill('BOSS@example.test');
+  await dialog.getByRole('button', { name: 'Împarte', exact: true }).click();
+  await expect(dialog).toContainText('Planul e deja împărțit cu BOSS@example.test.');
+  expect(drive.shares.get([...drive.files.keys()][0]!) ?? []).toEqual([]);
+});
+
+test('stopping a share that is already gone just takes it off the list', async ({ page }) => {
+  const drive = new FakeDrive();
+  await open(page, drive);
+  await page.getByRole('button', { name: 'Setări' }).click();
+  await page.getByRole('button', { name: 'Împarte planul…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Împarte planul' });
+  await dialog.getByLabel('Adresa de e-mail').fill('mihai@example.test');
+  await dialog.getByRole('button', { name: 'Împarte', exact: true }).click();
+  await expect(dialog.locator('.shares')).toContainText('mihai@example.test');
+  drive.shares.set([...drive.files.keys()][0]!, []); // removed in Drive meanwhile
+  await dialog.getByRole('button', { name: 'Nu mai împărți planul cu mihai@example.test' }).click();
+  await expect(dialog).toContainText('Planul nu e împărțit cu nimeni.');
+  await expect(dialog).not.toContainText('nu mai există');
+});

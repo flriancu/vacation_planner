@@ -131,7 +131,9 @@ export class DocumentSync {
   }
 
   update = (change: (doc: PlanDoc) => PlanDoc) => {
-    if (!this.current) return;
+    // Closed (signed out): a late answer (Google's picker, a slow dialog) must not write the plan
+    // back to this device, which signing out has just cleared.
+    if (!this.current || this.closed) return;
     this.current = change(this.current);
     this.options.replica?.write(this.current, true, this.calendarId);
     this.set({ doc: this.current, saveState: this.snapshot.saveState === 'signin' ? 'signin' : 'saving' });

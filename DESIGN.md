@@ -37,14 +37,15 @@ src/
     suggest.ts       bridge candidates + ranking   (SUG-1, 2, 7, 8)
     plan.ts          full-year plan proposal   (SUG-4)
     ics.ts           .ics export   (IO-2)
-    backup.ts        a copy of the plan as a file, read back and added to a plan   (IO-4)
+    backup.ts        a copy of the plan as a file, read back; what adding it does (only new leave)   (IO-4)
+    text.ts          names written by someone else, made safe to show on one line
     schema.ts        document types (§3), schemaVersion
     migrate.ts       migrate(doc) → doc, one step per version
     merge.ts         record-by-record merge (§4.3)
     edit.ts          updateRecord / deleteRecord / restoreRecord (deleted markers)
     clock.ts         nextStamp: an edit's updatedAt, never below one already in the document (§4.3)
     absorb.ts        another version of my plan, even one with other ids, into mine (duplicates, this device's copy, the demo)
-    people.ts        followed plans in order; a person's leave per day; days everyone is off   (PPL-4)
+    people.ts        followed plans in order, each once, never mine; moving one; a person's leave per day; days everyone is off   (PPL-4)
     blocks.ts        blockStats: a block's cost and the whole break it belongs to (CAL-7)
   storage/
     Storage.ts       interface (§4.1), and what a storage error may say about itself (retryable, needs sign-in)
@@ -54,7 +55,7 @@ src/
     DocumentSync.ts  open, auto-save, merge on conflict, retry, refresh, close
     Replica.ts       this device's copy of the plan (localStorage)
     retry.ts         backoff delays
-    Followed.ts      the plans I follow, read-only, each loaded on its own   (PPL-3)
+    Followed.ts      the plans I follow, read-only, each loaded on its own; why one isn't readable; retries   (PPL-3)
   google/
     auth.ts          GIS token client, incremental scopes, reconnect
     drive.ts         find / create / read / write the plan file
@@ -63,7 +64,9 @@ src/
   i18n/              ro.ts, en.ts, index.ts (useT hook)
   ui/                App, Calendar (+ calendarModel.ts: pure layout helpers), BlockEditor,
                      Legend, useDocument (connects DocumentSync to React and page events),
-                     useToday, errors.ts (errors in words), ErrorBoundary; later: BalancePanel,
+                     useToday, errors.ts (errors in words), ErrorBoundary, Select (a drop-down
+                     with pictures), usePeople (the people I follow: rows, lines, actions)
+                     + PeoplePanel, ShareDialog, DataDialogs; later: BalancePanel,
                      SuggestionsPanel, PlanDialog, SwapReminders, ImportDialog, SettingsDialog
 tests/
   unit/              Vitest, includes the §7 acceptance cases
@@ -294,14 +297,15 @@ The excused balance uses the same formulas with its quota and no adjustments; it
   - one sign-in action, in the account slot: "Conectează-te cu Google", or "Continuă ca {first name}" for a returning browser (the hint keeps email + first name). Signed out, a thin strip under the header (GOV.UK phase banner) only explains the demo, plus a "Folosește alt cont" link for a returning browser;
   - header controls never wrap their labels (HIG, M3): they keep their size, the title truncates first, and the demo status shows "Demo" below 1200 px (full text in the tooltip);
   - menus (`ui/Menu.tsx`) are disclosures (button + panel with form controls), close on Escape and outside click;
-  - the editor's leave type is a custom drop-down (`ui/Select.tsx`, the WAI-ARIA APG "select-only combobox"), because each type shows its swatch in the chosen status (office closed in the "off anyway" colours) and a native `<select>` can't show pictures on phones. The list opens in the dialog's flow below the field, like the month calendar; focus stays on the field (`aria-activedescendant`); Escape closes only the list;
+  - the editor's leave type is a custom drop-down (`ui/Select.tsx`, the WAI-ARIA APG "select-only combobox"), because each type shows its swatch in the chosen status (office closed in the "off anyway" colours) and a native `<select>` can't show pictures on phones. The list floats over the controls below the field, so opening or closing it never moves a control under a finger (adversarial testing: a tap meant for the list pressed Delete); a click outside closes it, a scroll doesn't; a press keeps the focus with `mousedown`, not `pointerdown` (Safari sends no click after a cancelled touch pointerdown); focus stays on the field (`aria-activedescendant`); Escape and Android's back gesture close only the list;
   - phones use 44 px controls (HIG/M3 touch targets).
 - **Visual encoding (CAL-4, CAL-6, CAL-11)**, checked against research (sources in the commit that introduced it):
   - *Status is ordered* (idea < planned < approved), so it is a **lightness ramp**: faint tint (9 %) → light fill → full accent. Lightness/value is the channel for ordered data (Bertin; Munzner's magnitude channels; ColorBrewer sequential schemes), and "lighter = less certain" was among the most intuitive cues in MacEachren et al. 2012. Hue is used only to separate "my leave" from "off anyway", never for order.
   - *Line style is the redundant cue*: dashed (idea) / solid (planned) / thick solid (approved). Dashing was the preferred uncertainty cue for lines (Boukhelifa et al. 2012) and gives a non-colour signal (WCAG 1.4.1).
   - *No patterns in cells*: high-contrast stripes near 3 cycles/degree cause pattern glare (Monger et al. 2015) and Google Calendar uses stripes for "declined"; a sparse dot pattern was tried next, but it made the day numbers harder to read (user feedback, 2026-10-21). Ideas are a faint tint instead.
   - *Two colours per scheme* (one tint, one accent): well under the 5–7 hues people track reliably (Healey 1996). The leave type lives in words (editor, tooltip).
-  - *Outlines nest by range*: the block that encloses another is outermost (leave around an office closure), each inner outline 3 px in, only on the sides where it has an edge, so lines run on from day to day; a right-angle turn gets its inner corner piece. Office-closed outlines are a darker shade of the "off anyway" fill (`--free-edge`), as leave's are of the leave fill. Month separators are dashed, so they never read as an outline.
+  - *Outlines nest by range*: each block has one nesting level for every day it covers (`calendarModel.nestLevels`: earlier start, then longer, takes the lowest level free of overlapping blocks), so the block that encloses another is outermost (leave around an office closure) and partly overlapping blocks keep one closed shape. Each inner outline steps in 3 px (2 px on phones), only on the sides where it has an edge, so lines run on from day to day; a right-angle turn gets its inner corner piece. Office-closed outlines are a darker shade of the "off anyway" fill (`--free-edge`), as leave's are of the leave fill. Month separators are long dashes drawn as a background (they don't shrink the day), so they never read as an idea's short dashes; dotted in forced colours.
+  - *Other people*: one line each in a fixed slot under the number, one neutral ink with an edge of the page colour on every fill. "Everyone shown and I off" is a double line along the top, a shape no outline has. The focus ring is an outline over all of it, with a ring of the page colour inside.
   - *Past and out-of-year days mute only the number*: fading the cell would read as "less certain".
   - *Grid and month lines are muted, neutral* (Few: grid "just visible enough"); today is the only filled circle; holidays get a small dot lower in the cell.
   - *Contrast*: a script computes WCAG ratios for every scheme × mode (outlines ≥ 3:1 against plain and "off anyway" cells, numbers ≥ 4.5:1). The planned fill alone is ~1.4:1 by design; its solid outline carries the difference, as 1.4.11 allows.

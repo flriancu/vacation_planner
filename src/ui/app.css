@@ -255,10 +255,20 @@ button.square {
 
 .shares li {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   gap: 0.5rem;
   overflow-wrap: anywhere;
+}
+
+.shares li > span {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.shares li > button {
+  white-space: nowrap;
 }
 
 /* Settings: the plan's data, below the look-and-language choices. */
@@ -619,6 +629,13 @@ button.status {
   flex-wrap: wrap;
   gap: 0.5rem;
   margin: 1rem 0;
+}
+
+.load-note {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
 }
 
 .load-state details.detail summary {

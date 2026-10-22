@@ -185,6 +185,9 @@ function LoadError({ error, account, sync }: { error: unknown; account: Account;
             {t('load.startNew')}
           </button>
         )}
+        {(error instanceof PlanRemovedError ||
+          error instanceof PlanMissingError ||
+          (error instanceof PlanFileGoneError && error.reason === 'trashed')) && <p className="load-note">{t('load.startNewNote')}</p>}
         {account.kind === 'google' && (
           <button type="button" onClick={() => account.signOut()}>
             {t('auth.signOut')}
@@ -343,7 +346,12 @@ function Planner({ doc, sync, storage, saveState, saveError, notices, account }:
   // Kept as words to translate, so a language switch translates the note too.
   const [dataNote, setDataNote] = useState<{ key: MessageKey; count?: number; reason?: MessageKey } | null>(null);
   const data = {
-    exportPlan: () => saveFile(t('file.copy', { date: localToday() }), toBackup(doc), 'application/json'),
+    exportPlan: () => {
+      // The time too, so two copies of one day don't end up as "(1)", "(2)".
+      const now = new Date();
+      const time = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+      saveFile(t('file.copy', { date: `${localToday()}-${time}` }), toBackup(doc), 'application/json');
+    },
     importPlan: () =>
       void pickFile('.json,application/json').then(
         (file) => {
@@ -471,7 +479,12 @@ function Planner({ doc, sync, storage, saveState, saveError, notices, account }:
         <CalendarExportDialog doc={doc} personId={personId} year={year} onClose={() => setDataDialog(null)} />
       )}
       {dataDialog?.kind === 'share' && canShare(storage) && (
-        <ShareDialog sharing={storage} calendarId={sync.calendar} onClose={() => setDataDialog(null)} />
+        <ShareDialog
+          sharing={storage}
+          calendarId={sync.calendar}
+          {...(account.kind === 'google' && { myEmail: account.email, onSignIn: () => void account.reconnect() })}
+          onClose={() => setDataDialog(null)}
+        />
       )}
       {dataDialog?.kind === 'import' && (
         <ImportDialog

@@ -1,12 +1,14 @@
 import { UnsupportedPlanError } from '../domain/migrate';
 import { AuthExpiredError } from '../google/auth';
 import { DriveError, PlanFileGoneError } from '../google/drive';
+import { PickerLoadError } from '../google/picker';
 import type { MessageKey } from '../i18n';
 import { OtherOwnerError, PlanMissingError, PlanRemovedError, SaveConflictError } from '../sync/DocumentSync';
 
 /** What went wrong, in the user's words (the technical text goes under "Technical details"). */
 export function errorMessage(e: unknown): MessageKey {
   if (e instanceof AuthExpiredError) return 'err.auth';
+  if (e instanceof PickerLoadError) return 'err.picker';
   if (e instanceof PlanRemovedError) return 'err.removed';
   if (e instanceof PlanMissingError) return 'err.missingCopy';
   if (e instanceof PlanFileGoneError) return e.reason === 'trashed' ? 'err.removed' : 'err.missing';

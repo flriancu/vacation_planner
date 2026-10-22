@@ -32,6 +32,9 @@ type WithPicker = Window & {
   google?: { picker?: PickerApi };
 };
 
+/** Google's picker didn't load (offline, blocked by an extension, Google down). */
+export class PickerLoadError extends Error {}
+
 let loading: Promise<PickerApi> | null = null;
 /** A picker script that loads but never calls back counts as a failure after this long. */
 const LOAD_TIMEOUT_MS = 30_000;
@@ -44,7 +47,7 @@ function loadPicker(): Promise<PickerApi> {
     const fail = () => {
       clearTimeout(timer);
       loading = null;
-      reject(new Error('Could not load the Google file picker'));
+      reject(new PickerLoadError('Could not load the Google file picker'));
     };
     const done = () => {
       clearTimeout(timer);

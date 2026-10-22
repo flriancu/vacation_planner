@@ -78,9 +78,7 @@ export function planCopy(mine: PlanDoc, copy: PlanDoc, personId: string): CopyPl
 
   const typeIds = new Map<string, string>();
   for (const t of Object.values(copy.leaveTypes)) {
-    const match = live(mine.leaveTypes).find((x) =>
-      t.key ? x.key === t.key : !x.key && x.name.ro === t.name.ro && x.name.en === t.name.en,
-    );
+    const match = live(mine.leaveTypes).find((x) => (t.key ? x.key === t.key : x.name.ro === t.name.ro || x.name.en === t.name.en));
     if (match) typeIds.set(t.id, match.id);
   }
 

@@ -200,7 +200,11 @@ describe('DriveStorage', () => {
     await storage().share('f1', 'ana@example.test');
     expect(JSON.parse(calls[0]!.body!)).toEqual({ type: 'user', role: 'reader', emailAddress: 'ana@example.test' });
     expect(new URL(calls[0]!.url).searchParams.get('sendNotificationEmail')).toBe('true');
-    expect(await storage().sharedWith('f1')).toEqual([{ id: 'perm-1', email: 'ana@example.test', name: 'Ana' }]);
+    // Every access but the owner's, also what was given in Drive (anyone with the link).
+    expect(await storage().sharedWith('f1')).toEqual([
+      { id: 'perm-1', kind: 'user', role: 'reader', email: 'ana@example.test', name: 'Ana' },
+      { id: 'any', kind: 'anyone', role: 'reader' },
+    ]);
     await storage().unshare('f1', 'perm-1');
     expect(calls.at(-1)!.method).toBe('DELETE');
   });

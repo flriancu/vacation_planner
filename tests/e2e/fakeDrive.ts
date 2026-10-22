@@ -8,6 +8,10 @@ export class FakeDrive {
   readonly files = new Map<string, { content: unknown; version: number; trashed?: boolean; owner?: string }>();
   /** Who each file is shared with (PPL-3). */
   readonly shares = new Map<string, { id: string; emailAddress: string }[]>();
+  /** Access given outside the app (in Drive), listed with the rest: { id, type, role, emailAddress?, domain? }. */
+  readonly otherAccess: Record<string, unknown>[] = [];
+  /** Permission lists that answer 500. */
+  failShareLists = 0;
   /** Writes that answer 503 before the next one succeeds. */
   failWrites = 0;
   /** File lists that answer 503 (a load that fails). */
@@ -60,16 +64,22 @@ export class FakeDrive {
         return json({ id: share.id });
       }
       if (req.method() === 'DELETE') {
+        if (!list.some((x) => x.id === perm[2])) return json({ error: 'not found' }, 404);
         this.shares.set(
           perm[1]!,
           list.filter((x) => x.id !== perm[2]),
         );
         return route.fulfill({ status: 200, headers: cors, body: '' });
       }
+      if (this.failShareLists > 0) {
+        this.failShareLists--;
+        return json({ error: 'backend error' }, 500);
+      }
       return json({
         permissions: [
           { id: 'owner', type: 'user', role: 'owner', emailAddress: 'ana@example.test' },
           ...list.map((x) => ({ ...x, type: 'user', role: 'reader' })),
+          ...this.otherAccess,
         ],
       });
     }

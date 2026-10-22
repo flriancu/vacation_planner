@@ -176,22 +176,35 @@ export async function trashPlanFile(token: string, id: string): Promise<void> {
 /** Someone a plan file is shared with (PPL-3). */
 export interface Share {
   id: string;
-  email: string;
+  kind: 'user' | 'group' | 'domain' | 'anyone';
+  email?: string;
+  domain?: string;
   name?: string;
+  role: 'reader' | 'commenter' | 'writer';
 }
+
+const KINDS = new Set(['user', 'group', 'domain', 'anyone']);
 
 const permissions = (fileId: string) => `${FILES}/${encodeURIComponent(fileId)}/permissions`;
 
-/** The people a file is shared with, read-only or not; the owner is not listed. */
+/**
+ * Everyone a file is shared with, however they got it (here or in Drive): people and groups by
+ * address, a whole domain, anyone with the link; reading, commenting or editing. Not the owner.
+ */
 export async function listShares(token: string, fileId: string): Promise<Share[]> {
-  const url = `${permissions(fileId)}?${new URLSearchParams({ fields: 'permissions(id,type,role,emailAddress,displayName)' })}`;
+  const url = `${permissions(fileId)}?${new URLSearchParams({ fields: 'permissions(id,type,role,emailAddress,domain,displayName)' })}`;
   const body = await json<{ permissions?: unknown }>(await call(token, url));
   if (!Array.isArray(body.permissions)) throw new DriveError(502, 'a list of permissions that is not a list');
-  return (body.permissions as { id?: unknown; type?: unknown; role?: unknown; emailAddress?: unknown; displayName?: unknown }[])
-    .filter((p) => p.type === 'user' && p.role !== 'owner' && typeof p.id === 'string' && typeof p.emailAddress === 'string')
+  type Raw = { id?: unknown; type?: unknown; role?: unknown; emailAddress?: unknown; domain?: unknown; displayName?: unknown };
+  return (body.permissions as Raw[])
+    .filter((p) => typeof p.id === 'string' && typeof p.type === 'string' && KINDS.has(p.type) && p.role !== 'owner')
+    .filter((p) => (p.type === 'user' || p.type === 'group' ? typeof p.emailAddress === 'string' : true))
     .map((p) => ({
       id: p.id as string,
-      email: p.emailAddress as string,
+      kind: p.type as Share['kind'],
+      role: p.role === 'reader' || p.role === 'commenter' ? p.role : 'writer',
+      ...(typeof p.emailAddress === 'string' && { email: p.emailAddress }),
+      ...(typeof p.domain === 'string' && { domain: p.domain }),
       ...(typeof p.displayName === 'string' && { name: p.displayName }),
     }));
 }
@@ -208,6 +221,11 @@ export async function shareFile(token: string, fileId: string, email: string): P
   });
 }
 
+/** Takes one access away; one that is already gone (404) counts as done. */
 export async function unshareFile(token: string, fileId: string, shareId: string): Promise<void> {
-  await call(token, `${permissions(fileId)}/${encodeURIComponent(shareId)}`, { method: 'DELETE' });
+  try {
+    await call(token, `${permissions(fileId)}/${encodeURIComponent(shareId)}`, { method: 'DELETE' });
+  } catch (e) {
+    if (!(e instanceof DriveError && e.status === 404)) throw e;
+  }
 }

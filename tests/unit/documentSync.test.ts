@@ -413,6 +413,19 @@ describe('DocumentSync: after sign-out, deleted plans, replaced plans', () => {
     expect(storage.lists).toBe(lists);
   });
 
+  it('ignores a change that arrives after sign-out: the device copy stays cleared', async () => {
+    const storage = new TestStorage();
+    const store = new MapStore();
+    const replica = new LocalReplica('r', undefined, store);
+    const s = sync(storage, { replica });
+    await s.open();
+    await s.close();
+    replica.clear(); // what signing out does
+    addBlock(s, '2027-03-01'); // say, Google's picker answering late
+    expect(store.items.size).toBe(0);
+    expect(replica.read()).toBeNull();
+  });
+
   it('asks before bringing a plan deleted for good back from a device copy', async () => {
     const storage = new TestStorage();
     const store = new MapStore();
