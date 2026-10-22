@@ -74,7 +74,8 @@ const VALID: { [K in keyof Collections]: (r: Raw, types: ReadonlySet<string>) =>
     typeof r.closedCountsAgainstAnnual === 'boolean',
   adjustments: (r) => isText(r.personId) && isYear(r.year) && isDay(r.date) && isNumber(r.days) && isText(r.note),
   dismissals: (r) => isText(r.personId) && ['suggestion', 'swap'].includes(r.kind as string) && isRange(r),
-  following: (r) => isText(r.driveFileId) && isText(r.label),
+  following: (r) =>
+    isText(r.driveFileId) && isText(r.label) && optional(r.order, isNumber) && optional(r.hidden, (v) => typeof v === 'boolean'),
 };
 
 /**

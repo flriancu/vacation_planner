@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { useI18n } from '../i18n';
 import { Legend } from './Legend';
 import { Notice } from './Notice';
@@ -21,7 +22,7 @@ function Hint() {
  * widths: a column on the right (legend, hint; later balance and suggestions). Narrower: above the
  * calendar, the legend as one row (medium) or behind a "Legend" toggle (compact).
  */
-export function SidePane({ width }: { width: WidthClass }) {
+export function SidePane({ width, people }: { width: WidthClass; people?: ReactNode }) {
   const { t } = useI18n();
   if (width === 'expanded') {
     return (
@@ -30,6 +31,12 @@ export function SidePane({ width }: { width: WidthClass }) {
           <h2>{t('legend.label')}</h2>
           <Legend stacked />
         </section>
+        {people && (
+          <section>
+            <h2>{t('people.title')}</h2>
+            {people}
+          </section>
+        )}
         <Hint />
       </aside>
     );
@@ -40,9 +47,13 @@ export function SidePane({ width }: { width: WidthClass }) {
         <details className="legend-toggle">
           <summary>{t('legend.label')}</summary>
           <Legend />
+          {people}
         </details>
       ) : (
-        <Legend />
+        <>
+          <Legend />
+          {people}
+        </>
       )}
       <Hint />
     </div>

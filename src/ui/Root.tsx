@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { DRIVE_FILE_SCOPE, GOOGLE_CLIENT_ID, GOOGLE_SCOPES } from '../config';
+import { DRIVE_FILE_SCOPE, GOOGLE_API_KEY, GOOGLE_APP_ID, GOOGLE_CLIENT_ID, GOOGLE_SCOPES } from '../config';
 import { GoogleAuth, SignInError, type Session } from '../google/auth';
+import { pickSharedPlan } from '../google/picker';
 import { DriveStorage } from '../storage/DriveStorage';
 import { MemoryStorage } from '../storage/MemoryStorage';
 import { LocalReplica, replicaKey, unsavedCopies } from '../sync/Replica';
@@ -127,6 +128,14 @@ export function Root() {
     [replica],
   );
 
+  const pickPlan = useCallback(
+    (title: string, locale: string) =>
+      Promise.resolve().then(() =>
+        pickSharedPlan({ token: auth.accessToken(sub), apiKey: GOOGLE_API_KEY, appId: GOOGLE_APP_ID, locale, title }),
+      ),
+    [sub],
+  );
+
   /** The demo plan, once, right after signing in; the demo starts over empty. */
   const takeDemo = useCallback(() => {
     if (!carryDemo.current) return null;
@@ -139,7 +148,15 @@ export function Root() {
   }, []);
 
   const account: Account = session
-    ? { kind: 'google', sub: session.user.sub, name: session.user.name, email: session.user.email, reconnect, signOut }
+    ? {
+        kind: 'google',
+        sub: session.user.sub,
+        name: session.user.name,
+        email: session.user.email,
+        reconnect,
+        signOut,
+        pickSharedPlan: pickPlan,
+      }
     : { kind: 'demo', hint: offered, unsavedOnDevice: !!waiting, busy, error, signIn };
 
   return drive ? (

@@ -252,6 +252,88 @@
   bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
 }
 
+/* ---- Other people (PPL-4): one line each under the number, in a fixed place; the same
+   status language as the outlines: dashed = idea, thin = planned, thick = approved.
+   Neutral ink, so the accent stays mine. Borders, so they survive forced colours. ---- */
+.day.with-lines {
+  align-items: flex-start;
+  padding-top: 3px;
+}
+
+.day.with-lines.base-holiday::before {
+  top: 5px;
+  right: 6px;
+  bottom: auto;
+  left: auto;
+  margin: 0;
+}
+
+.lines {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 4px;
+  display: grid;
+  gap: 3px;
+  pointer-events: none;
+}
+
+.line {
+  --ink: color-mix(in srgb, var(--fg) 72%, transparent);
+  height: 0;
+}
+
+.line.st-idea {
+  border-top: 2px dashed var(--ink);
+}
+
+.line.st-planned {
+  border-top: 2px solid var(--ink);
+}
+
+.line.st-approved {
+  border-top: 4px solid var(--ink);
+}
+
+.lines-3 .line.st-approved,
+.lines-4 .line.st-approved {
+  border-top-width: 3px;
+}
+
+.lines-4 {
+  gap: 2px;
+}
+
+.line.start {
+  margin-left: 4px;
+}
+
+.line.end {
+  margin-right: 4px;
+}
+
+.day.fill-approved .line {
+  --ink: var(--leave-fg);
+}
+
+/* Everyone off together: a line along the top of those days, thicker when it's all approved.
+   Above the outlines (it would hide under a block's top edge), with a thin edge of the page
+   colour below it, so it stands out on the leave fill too. */
+.together {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  left: 0;
+  right: 0;
+  border-top: 3px solid var(--accent);
+  box-shadow: 0 1px 0 var(--surface);
+  pointer-events: none;
+}
+
+.together.st-planned {
+  border-top-width: 2px;
+}
+
 /* Windows High Contrast and other forced colours replace every fill with the system background,
    so days off and leave would look like workdays. Use the system's own colours and lines. */
 @media (forced-colors: active) {

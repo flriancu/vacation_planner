@@ -100,6 +100,11 @@ export class DocumentSync {
 
   getSnapshot = () => this.snapshot;
 
+  /** My plan's id in storage (the Drive file), once open: for sharing it, and to tell it from plans I follow. */
+  get calendar(): string {
+    return this.calendarId;
+  }
+
   /** True while some change may not be in storage yet. */
   get dirty(): boolean {
     return this.current !== this.saved;

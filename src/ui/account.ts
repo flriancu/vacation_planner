@@ -28,4 +28,6 @@ export type Account =
       reconnect: () => Promise<string | null>;
       /** `keepDeviceCopy`: some change didn't reach Drive, so this device keeps its copy for the next sign-in. */
       signOut: (keepDeviceCopy?: boolean) => void;
+      /** Google's picker on plans shared with me (PPL-3): the picked file, or null if closed. */
+      pickSharedPlan: (title: string, locale: string) => Promise<{ id: string; name: string } | null>;
     };

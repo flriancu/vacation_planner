@@ -12,17 +12,31 @@ import { blockStats } from '../domain/blocks';
 import { blockBudget, buildDays } from '../domain/calendar';
 import { addDays, overlaps, yearOf, type ISODate } from '../domain/dates';
 import { FIRST_YEAR, LAST_YEAR } from '../domain/holidays';
+import type { LeaveDay } from '../domain/people';
 import { live, type Block, type PlanDoc } from '../domain/schema';
 import { useI18n } from '../i18n';
 import { describeBlock, type BlockDescription } from './describe';
 import { buildWeeks, clampDate, monthEdges, orderRange, outlineEdges, viewRange } from './calendarModel';
 import './calendar.css';
 
+/** Someone whose plan I follow, as the calendar draws them: one line under each day (PPL-4). */
+export interface OtherPerson {
+  id: string;
+  name: string;
+  days: ReadonlyMap<ISODate, LeaveDay>;
+  /** Their leave type's name in my language (their plan has its own types). */
+  typeName: (day: LeaveDay) => string;
+}
+
 interface Props {
   year: number;
   doc: PlanDoc;
   personId: string;
   today: ISODate;
+  /** The people I follow and show, in their fixed order: line 1 first. */
+  others?: readonly OtherPerson[];
+  /** Days when I and all of them are off (planned or approved), and how sure that is. */
+  together?: ReadonlyMap<ISODate, 'planned' | 'approved'>;
   /** A new range was selected (CAL-8). */
   onCreate: (start: ISODate, end: ISODate) => void;
   /** A day with leave on it was activated (CAL-9). */
@@ -39,6 +53,8 @@ const FREE_TYPES: ReadonlySet<string> = new Set(['closed']);
 
 /** Outlines drawn per day; more would crowd into the number (the tooltip still lists every block). */
 const MAX_OUTLINES = 4;
+/** People drawn as lines under a day; a phone-sized day holds no more (the tooltip names everyone). */
+export const MAX_PEOPLE = 4;
 
 const STEPS: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
 /** A press becomes a drag only past this distance, so a trembling click stays one day. */
@@ -62,7 +78,7 @@ function dayAt(ev: PointerEvent): ISODate | undefined {
  * (works on touch, where a drag scrolls); or arrows + Shift+arrows + Enter.
  * Activating a day that already has leave opens that leave instead.
  */
-export function Calendar({ year, doc, personId, today, onCreate, onOpen }: Props) {
+export function Calendar({ year, doc, personId, today, others = [], together, onCreate, onOpen }: Props) {
   const i18n = useI18n();
   const { t, date: fmt, name } = i18n;
   const { from, to } = viewRange(year);
@@ -108,8 +124,17 @@ export function Calendar({ year, doc, personId, today, onCreate, onOpen }: Props
       stretches.add(desc.stretch);
     }
     for (const s of stretches) lines.push(`→ ${s}`);
+    lines.push(...othersOn(d));
+    if (together?.has(d)) lines.push(t('calendar.together'));
     return lines.filter(Boolean).join('\n') || undefined;
   };
+
+  /** "Ana: Concediu de odihnă (aprobat)", for each person I follow who has leave on `d`. */
+  const othersOn = (d: ISODate) =>
+    others.flatMap((o) => {
+      const day = o.days.get(d);
+      return day ? [`${o.name}: ${o.typeName(day)} (${lower(t(`status.${day.status}`))})`] : [];
+    });
 
   const [selection, setSelection] = useState<Selection | null>(null);
   const [pending, setPending] = useState<ISODate | null>(null);
@@ -309,6 +334,8 @@ export function Calendar({ year, doc, personId, today, onCreate, onOpen }: Props
                 fmt(d, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
                 ...(info.holiday?.names.map(name) ?? []),
                 ...info.blocks.map((b) => `${name(doc.leaveTypes[b.typeId]!.name)} (${t(`status.${b.status}`)}): ${sentence(b)}`),
+                ...othersOn(d),
+                ...(together?.has(d) ? [t('calendar.together')] : []),
                 ...(d === today ? [t('calendar.today')] : []),
               ].join(', ');
               const classes = [
@@ -324,6 +351,7 @@ export function Calendar({ year, doc, personId, today, onCreate, onOpen }: Props
                 firm && (isFree(firm) ? 'free-block' : info.base === 'work' && `fill-${firm.status}`),
                 me.top && 'm-top',
                 me.left && 'm-left',
+                others.length > 0 && 'with-lines',
               ];
               return (
                 // Keys are handled once, on the grid (onKeyDown above).
@@ -347,6 +375,20 @@ export function Calendar({ year, doc, personId, today, onCreate, onOpen }: Props
                   <span className="num" aria-hidden="true">
                     {Number(d.slice(8))}
                   </span>
+                  {together?.has(d) && <span className={`together st-${together.get(d)}`} aria-hidden="true" />}
+                  {others.length > 0 && (
+                    <span className={`lines lines-${Math.min(others.length, MAX_PEOPLE)}`} aria-hidden="true">
+                      {others.slice(0, MAX_PEOPLE).map((o) => {
+                        const day = o.days.get(d);
+                        return (
+                          <span
+                            key={o.id}
+                            className={day ? `line st-${day.status}${day.start ? ' start' : ''}${day.end ? ' end' : ''}` : 'line'}
+                          />
+                        );
+                      })}
+                    </span>
+                  )}
                   {info.blocks.slice(0, MAX_OUTLINES).map((b, i) => {
                     const e = outlineEdges(d, b.start, b.end);
                     return (

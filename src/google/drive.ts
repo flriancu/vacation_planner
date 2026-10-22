@@ -172,3 +172,42 @@ export async function trashPlanFile(token: string, id: string): Promise<void> {
     body: JSON.stringify({ trashed: true }),
   });
 }
+
+/** Someone a plan file is shared with (PPL-3). */
+export interface Share {
+  id: string;
+  email: string;
+  name?: string;
+}
+
+const permissions = (fileId: string) => `${FILES}/${encodeURIComponent(fileId)}/permissions`;
+
+/** The people a file is shared with, read-only or not; the owner is not listed. */
+export async function listShares(token: string, fileId: string): Promise<Share[]> {
+  const url = `${permissions(fileId)}?${new URLSearchParams({ fields: 'permissions(id,type,role,emailAddress,displayName)' })}`;
+  const body = await json<{ permissions?: unknown }>(await call(token, url));
+  if (!Array.isArray(body.permissions)) throw new DriveError(502, 'a list of permissions that is not a list');
+  return (body.permissions as { id?: unknown; type?: unknown; role?: unknown; emailAddress?: unknown; displayName?: unknown }[])
+    .filter((p) => p.type === 'user' && p.role !== 'owner' && typeof p.id === 'string' && typeof p.emailAddress === 'string')
+    .map((p) => ({
+      id: p.id as string,
+      email: p.emailAddress as string,
+      ...(typeof p.displayName === 'string' && { name: p.displayName }),
+    }));
+}
+
+/**
+ * Lets `email` read the file (never change it). Google tells them by email. `drive.file` allows
+ * this on files the app created, so no broader permission is needed.
+ */
+export async function shareFile(token: string, fileId: string, email: string): Promise<void> {
+  await call(token, `${permissions(fileId)}?${new URLSearchParams({ sendNotificationEmail: 'true', fields: 'id' })}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'user', role: 'reader', emailAddress: email }),
+  });
+}
+
+export async function unshareFile(token: string, fileId: string, shareId: string): Promise<void> {
+  await call(token, `${permissions(fileId)}/${encodeURIComponent(shareId)}`, { method: 'DELETE' });
+}

@@ -13,6 +13,8 @@ export interface DataActions {
   exportPlan: () => void;
   importPlan: () => void;
   exportCalendar: () => void;
+  /** Signed in only: share my plan read-only (PPL-3). */
+  share?: () => void;
 }
 
 export interface ThemeControls {
@@ -150,6 +152,11 @@ function SettingsControls({ theme, data }: { theme: ThemeControls; data: DataAct
         <button type="button" className="link" onClick={data.exportCalendar}>
           {t('data.exportCalendar')}
         </button>
+        {data.share && (
+          <button type="button" className="link" onClick={data.share}>
+            {t('share.action')}
+          </button>
+        )}
       </div>
     </div>
   );

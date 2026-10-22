@@ -113,8 +113,8 @@ Priority: **M** = must (v1), **S** = should (v1 if cheap), **v2** = phase 2.
 |---|---|---|
 | PPL-1 | M | The data model holds a list of people per file. In v1 it holds one person (me). |
 | PPL-2 | v2 | Add people without an account (kids) to my file, each with their own blocks. |
-| PPL-3 | v2 | Follow another account's calendar file that was shared with me in Drive: pick it once with the Google Picker. The list of files I follow is stored in my own file, so it syncs between my devices. |
-| PPL-4 | v2 | Overlay view: toggle each followed person on or off; their blocks are drawn in that person's colour. Followed calendars are read-only to me. |
+| PPL-3 | M | Sharing and following, from the app. Settings → "Share my plan…": an email address gets read-only access to my plan file (Google emails them); the dialog lists who has it and stops sharing. People → "Follow a plan…": Google's file picker on plans shared with me; picking one adds it to the plans I follow, stored in my own file, so it syncs between my devices. My own plan can't be followed. Followed plans are read-only to me, reloaded when the page comes back into view; one that can no longer be read says so and keeps its place. |
+| PPL-4 | M | Overlay: each followed person is one line under the number of my days, in a fixed place (line 1 first: the order I started following, which I can change in the legend). People are told apart by place and name, not colour (two colours stay, CAL-4): the lines are in a neutral ink, in the same status language as my outlines (dashed = idea, thin = planned, thick = approved). At most four lines. Each person can be switched off. A line along the top of my days marks when everyone shown and I are off (planned or approved leave, or days off anyway; ideas don't count; thicker when all of it is approved). The day's tooltip names each person and their leave type and status. |
 | PPL-5 | v2 | Overlap finder: date ranges when every selected person is off, and suggestions ranked by the combined cost for the selected people. |
 | PPL-6 | v2 | School holidays (vacanțe școlare) entered per year as a calendar layer, attached to a child or shared. |
 

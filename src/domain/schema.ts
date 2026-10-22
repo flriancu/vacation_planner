@@ -83,9 +83,15 @@ export interface Dismissal extends Meta {
   end: ISODate;
 }
 
+/** Someone else's plan I follow, read-only (PPL-3), drawn as a line under my days (PPL-4). */
 export interface Follow extends Meta {
   driveFileId: string;
+  /** The file's name when I picked it; the plan's own person name is shown once it loads. */
   label: string;
+  /** Its line's place, 1 first; unset = in the order I started following. */
+  order?: number;
+  /** Switched off in the legend: not drawn, still followed. */
+  hidden?: boolean;
 }
 
 export interface Settings {

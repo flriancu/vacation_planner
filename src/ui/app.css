@@ -149,6 +149,114 @@ button.square {
   gap: 0.6rem;
 }
 
+/* ---- People I follow (PeoplePanel): name, line place, switch, order ---- */
+.people {
+  display: grid;
+  gap: 0.6rem;
+  font-size: 0.875rem;
+}
+
+.people ul:not(.legend) {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.people li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.people .person {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.people .person-name {
+  display: grid;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.people .person-state,
+.people-empty,
+.people-note {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.people .person-actions {
+  display: flex;
+  gap: 0.2rem;
+}
+
+.people .person-actions .square {
+  width: 1.9rem;
+  min-height: 1.9rem;
+}
+
+.people > .link {
+  justify-self: start;
+}
+
+.line-sample,
+.together-sample {
+  display: inline-block;
+  width: 1.6rem;
+  vertical-align: middle;
+}
+
+.line-sample.st-idea {
+  border-top: 2px dashed color-mix(in srgb, var(--fg) 72%, transparent);
+}
+
+.line-sample.st-planned {
+  border-top: 2px solid color-mix(in srgb, var(--fg) 72%, transparent);
+}
+
+.line-sample.st-approved {
+  border-top: 4px solid color-mix(in srgb, var(--fg) 72%, transparent);
+}
+
+.together-sample {
+  border-top: 3px solid var(--accent);
+}
+
+/* ShareDialog */
+.share-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.share-form label {
+  flex: 1;
+  min-width: 0;
+}
+
+.shares {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.shares li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  overflow-wrap: anywhere;
+}
+
 /* Settings: the plan's data, below the look-and-language choices. */
 .data-actions {
   display: grid;

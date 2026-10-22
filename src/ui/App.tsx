@@ -1,25 +1,30 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { addFromBackup, readBackup, summarize, toBackup } from '../domain/backup';
 import { nextStamp } from '../domain/clock';
 import { yearOf, type ISODate } from '../domain/dates';
 import { deleteRecord, restoreRecord, updateRecord } from '../domain/edit';
 import { FIRST_YEAR, LAST_YEAR } from '../domain/holidays';
-import { addRecord, live, newPlanDoc, STATUS_RANK, type Block, type PlanDoc, type RecordContext } from '../domain/schema';
+import { followed, leaveDays, offTogether, ownPerson } from '../domain/people';
+import { addRecord, live, newPlanDoc, STATUS_RANK, type Block, type Follow, type PlanDoc, type RecordContext } from '../domain/schema';
 import { AuthExpiredError } from '../google/auth';
 import { PlanFileGoneError } from '../google/drive';
 import { I18nProvider, useI18n, type Lang } from '../i18n';
+import { canShare } from '../storage/Sharing';
 import type { Storage } from '../storage/Storage';
 import { PlanMissingError, PlanRemovedError, type DocumentSync } from '../sync/DocumentSync';
 import type { ReplicaStore } from '../sync/Replica';
 import type { Account } from './account';
 import { BlockEditor, type Draft, type EditorTarget } from './BlockEditor';
-import { Calendar } from './Calendar';
+import { Calendar, MAX_PEOPLE, type OtherPerson } from './Calendar';
 import { viewRange } from './calendarModel';
 import { DemoStrip } from './DemoStrip';
 import { errorDetail, errorMessage } from './errors';
 import { CalendarExportDialog, ImportDialog } from './DataDialogs';
 import { saveFile, pickFile } from './download';
 import { Header } from './Header';
+import { PeoplePanel, type PersonRow } from './PeoplePanel';
+import { ShareDialog } from './ShareDialog';
+import { useFollowed } from './useFollowed';
 import { Notice } from './Notice';
 import { SidePane } from './SidePane';
 import { useTheme } from './theme';
@@ -124,7 +129,7 @@ export function App({ storage, account, replica, carry }: AppProps) {
       {loadError ? (
         <LoadError error={loadError} account={shown} sync={sync} />
       ) : doc ? (
-        <Planner doc={doc} sync={sync} saveState={saveState} saveError={saveError} notices={notices} account={shown} />
+        <Planner doc={doc} sync={sync} storage={storage} saveState={saveState} saveError={saveError} notices={notices} account={shown} />
       ) : (
         <LoadingState />
       )}
@@ -197,6 +202,7 @@ function LoadError({ error, account, sync }: { error: unknown; account: Account;
 interface PlannerProps {
   doc: PlanDoc;
   sync: DocumentSync;
+  storage: Storage;
   saveState: SaveState;
   saveError: unknown;
   notices: readonly SyncNotice[];
@@ -205,8 +211,8 @@ interface PlannerProps {
 
 const clampYear = (y: number) => Math.min(LAST_YEAR, Math.max(FIRST_YEAR, y));
 
-function Planner({ doc, sync, saveState, saveError, notices, account }: PlannerProps) {
-  const { t, lang, plural } = useI18n();
+function Planner({ doc, sync, storage, saveState, saveError, notices, account }: PlannerProps) {
+  const { t, lang, plural, name } = useI18n();
   const { scheme, setScheme, mode, setMode } = useTheme();
   const today = useToday();
   const [year, setYearState] = useState(() => clampYear(yearOf(today)));
@@ -330,7 +336,9 @@ function Planner({ doc, sync, saveState, saveError, notices, account }: PlannerP
   }, [hidden, height]);
 
   // The plan's data (Settings): a copy to keep, a copy to add, a calendar file (IO-2, IO-4).
-  const [dataDialog, setDataDialog] = useState<{ kind: 'calendar' } | { kind: 'import'; copy: PlanDoc; name: string } | null>(null);
+  const [dataDialog, setDataDialog] = useState<
+    { kind: 'calendar' } | { kind: 'share' } | { kind: 'import'; copy: PlanDoc; name: string } | null
+  >(null);
   const [dataNote, setDataNote] = useState<string | null>(null);
   const data = {
     exportPlan: () => saveFile(`plan-concedii-${localToday()}.json`, toBackup(doc), 'application/json'),
@@ -344,11 +352,86 @@ function Planner({ doc, sync, saveState, saveError, notices, account }: PlannerP
         }
       }),
     exportCalendar: () => setDataDialog({ kind: 'calendar' }),
+    ...(account.kind === 'google' && canShare(storage) && { share: () => setDataDialog({ kind: 'share' }) }),
   };
   const addCopy = (copy: PlanDoc) => {
     setDataDialog(null);
     update((d) => addFromBackup(d, copy));
     setDataNote(t('import.done', { count: plural('leaves', summarize(copy).blocks) }));
+  };
+
+  // The people whose plans I follow (PPL-3, PPL-4): one line each under my days, in a fixed order.
+  const follows = useMemo(() => followed(doc), [doc]);
+  const plans = useFollowed(
+    storage,
+    follows.map((f) => f.driveFileId),
+  );
+  const [peopleNote, setPeopleNote] = useState<string | null>(null);
+  const people = useMemo<PersonRow[]>(() => {
+    const byId = new Map(plans.map((p) => [p.calendarId, p]));
+    return follows.map((follow) => {
+      const plan = byId.get(follow.driveFileId);
+      const own = plan?.doc && ownPerson(plan.doc);
+      const fileName = follow.label.replace(/\.json$/i, '');
+      return {
+        follow,
+        name: (own && plan.doc!.people[own]?.name) || fileName,
+        state: plan?.doc ? 'ready' : plan?.error ? 'unreadable' : 'loading',
+      };
+    });
+  }, [follows, plans]);
+  const { others, together } = useMemo(() => {
+    const view = viewRange(year);
+    const byId = new Map(plans.map((p) => [p.calendarId, p]));
+    const shownPeople = people.filter((p) => !p.follow.hidden).slice(0, MAX_PEOPLE);
+    const lines: OtherPerson[] = shownPeople.map((p) => {
+      const theirs = byId.get(p.follow.driveFileId)?.doc;
+      const own = theirs && ownPerson(theirs);
+      return {
+        id: p.follow.id,
+        name: p.name,
+        // Not loaded (yet): an empty line keeps everyone else's place.
+        days: theirs && own ? leaveDays(theirs, own, view.from, view.to) : new Map(),
+        typeName: (day) => (theirs?.leaveTypes[day.block.typeId] ? name(theirs.leaveTypes[day.block.typeId]!.name) : ''),
+      };
+    });
+    const loaded = shownPeople.flatMap((p) => {
+      const theirs = byId.get(p.follow.driveFileId)?.doc;
+      const own = theirs && ownPerson(theirs);
+      return theirs && own ? [{ doc: theirs, personId: own }] : [];
+    });
+    return { others: lines, together: loaded.length ? offTogether([{ doc, personId }, ...loaded], view.from, view.to) : undefined };
+  }, [people, plans, year, doc, personId, name]);
+
+  const peopleActions = {
+    onToggle: (f: Follow) => update((d) => updateRecord(d, 'following', f.id, { hidden: f.hidden ? undefined : true }, nextStamp(d))),
+    onMove: (f: Follow, by: -1 | 1) =>
+      update((d) => {
+        const order = followed(d);
+        const i = order.findIndex((x) => x.id === f.id);
+        const j = i + by;
+        if (i < 0 || j < 0 || j >= order.length) return d;
+        [order[i], order[j]] = [order[j]!, order[i]!];
+        // Every place written down, so the order is the same on every device.
+        return order.reduce(
+          (acc, x, k) => (x.order === k + 1 ? acc : updateRecord(acc, 'following', x.id, { order: k + 1 }, nextStamp(acc))),
+          d,
+        );
+      }),
+    onUnfollow: (f: Follow) => update((d) => deleteRecord(d, 'following', f.id, nextStamp(d))),
+    onFollow: () => {
+      if (account.kind !== 'google') return;
+      setPeopleNote(null);
+      account.pickSharedPlan(t('people.pickerTitle'), lang).then(
+        (file) => {
+          if (!file) return;
+          if (file.id === sync.calendar) setPeopleNote(t('people.own'));
+          else if (follows.some((f) => f.driveFileId === file.id)) setPeopleNote(t('people.already'));
+          else update((d) => addRecord(d, 'following', { driveFileId: file.id, label: file.name }, recordContext(d)).doc);
+        },
+        (e: unknown) => setPeopleNote(t('people.pickError', { reason: t(errorMessage(e)) })),
+      );
+    },
   };
 
   const noticeText = (n: SyncNotice) =>
@@ -387,17 +470,29 @@ function Planner({ doc, sync, saveState, saveError, notices, account }: PlannerP
       )}
 
       <main className="layout" tabIndex={-1}>
-        {width !== 'expanded' && <SidePane width={width} />}
+        {width !== 'expanded' && (
+          <SidePane
+            width={width}
+            people={account.kind === 'google' ? <PeoplePanel people={people} note={peopleNote} {...peopleActions} /> : null}
+          />
+        )}
         <Calendar
           key={year}
           year={year}
           doc={doc}
           personId={personId}
           today={today}
+          others={others}
+          {...(together && { together })}
           onCreate={(start, end) => openEditor({ mode: 'new', start, end }, start)}
           onOpen={openDay}
         />
-        {width === 'expanded' && <SidePane width={width} />}
+        {width === 'expanded' && (
+          <SidePane
+            width={width}
+            people={account.kind === 'google' ? <PeoplePanel people={people} note={peopleNote} {...peopleActions} /> : null}
+          />
+        )}
       </main>
 
       <footer className="app-footer">
@@ -411,6 +506,9 @@ function Planner({ doc, sync, saveState, saveError, notices, account }: PlannerP
 
       {dataDialog?.kind === 'calendar' && (
         <CalendarExportDialog doc={doc} personId={personId} year={year} onClose={() => setDataDialog(null)} />
+      )}
+      {dataDialog?.kind === 'share' && canShare(storage) && (
+        <ShareDialog sharing={storage} calendarId={sync.calendar} onClose={() => setDataDialog(null)} />
       )}
       {dataDialog?.kind === 'import' && (
         <ImportDialog

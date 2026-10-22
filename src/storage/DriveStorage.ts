@@ -1,6 +1,18 @@
 import { migrate, toFile, UnsupportedPlanError } from '../domain/migrate';
 import type { PlanDoc } from '../domain/schema';
-import { createPlanFile, findPlanFiles, getVersion, readPlanFile, trashPlanFile, writePlanFile, type DriveFile } from '../google/drive';
+import {
+  createPlanFile,
+  findPlanFiles,
+  getVersion,
+  listShares,
+  readPlanFile,
+  shareFile,
+  trashPlanFile,
+  unshareFile,
+  writePlanFile,
+  type DriveFile,
+} from '../google/drive';
+import type { Sharing } from './Sharing';
 import type { CalendarRef, SaveResult, Storage } from './Storage';
 
 const ref = (f: DriveFile): CalendarRef => ({ calendarId: f.id, ownerName: '', writable: true });
@@ -18,7 +30,7 @@ function parse(text: string): unknown {
  * Plans as JSON files in the user's own Google Drive (DESIGN §4.2). `token` returns a valid
  * access token or throws AuthExpiredError, which the UI turns into a "reconnect" prompt.
  */
-export class DriveStorage implements Storage {
+export class DriveStorage implements Storage, Sharing {
   readonly kind = 'drive';
 
   constructor(private readonly token: () => string) {}
@@ -58,5 +70,17 @@ export class DriveStorage implements Storage {
 
   remove(calendarId: string): Promise<void> {
     return trashPlanFile(this.token(), calendarId);
+  }
+
+  sharedWith(calendarId: string) {
+    return listShares(this.token(), calendarId);
+  }
+
+  share(calendarId: string, email: string) {
+    return shareFile(this.token(), calendarId, email);
+  }
+
+  unshare(calendarId: string, sharedWithId: string) {
+    return unshareFile(this.token(), calendarId, sharedWithId);
   }
 }

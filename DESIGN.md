@@ -44,6 +44,7 @@ src/
     edit.ts          updateRecord / deleteRecord / restoreRecord (deleted markers)
     clock.ts         nextStamp: an edit's updatedAt, never below one already in the document (§4.3)
     absorb.ts        another version of my plan, even one with other ids, into mine (duplicates, this device's copy, the demo)
+    people.ts        followed plans in order; a person's leave per day; days everyone is off   (PPL-4)
     blocks.ts        blockStats: a block's cost and the whole break it belongs to (CAL-7)
   storage/
     Storage.ts       interface (§4.1), and what a storage error may say about itself (retryable, needs sign-in)
@@ -53,11 +54,12 @@ src/
     DocumentSync.ts  open, auto-save, merge on conflict, retry, refresh, close
     Replica.ts       this device's copy of the plan (localStorage)
     retry.ts         backoff delays
+    Followed.ts      the plans I follow, read-only, each loaded on its own   (PPL-3)
   google/
     auth.ts          GIS token client, incremental scopes, reconnect
     drive.ts         find / create / read / write the plan file
     calendar.ts      event upsert / delete   (IO-3)
-    picker.ts        v2
+    picker.ts        Google's file picker, to follow a plan shared with me   (PPL-3)
   i18n/              ro.ts, en.ts, index.ts (useT hook)
   ui/                App, Calendar (+ calendarModel.ts: pure layout helpers), BlockEditor,
                      Legend, useDocument (connects DocumentSync to React and page events),
@@ -336,7 +338,7 @@ The excused balance uses the same formulas with its quota and no adjustments; it
 3. **Google:** sign-in, DriveStorage, merge on conflict, save status. *Done 2026-10-21; hardened 2026-10-22 after adversarial testing (§4.5).*
 4. **Planning:** balance panel, swap reminders, suggestions panel, plan proposal.
 5. **Import and export:** plan copies (save, add from a copy: IO-4), the old sheet through a private script into a copy (IO-1), `.ics` export (IO-2). *Done 2026-10-22. Calendar push (IO-3) deferred.*
-6. **v2:** people, following others' files with the Picker, overlay, overlap finder, school holidays.
+6. **v2:** sharing my plan and following others' with the Picker, the overlay of lines (PPL-3, PPL-4: *done 2026-10-22*); people without accounts, overlap finder, school holidays.
 
 ## 10. Risks
 

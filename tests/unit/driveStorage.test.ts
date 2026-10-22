@@ -180,6 +180,31 @@ describe('DriveStorage', () => {
     await expect(storage().listCalendars()).rejects.toBeInstanceOf(DriveError);
   });
 
+  it('shares my plan read-only, lists who it is shared with (not the owner), and stops sharing (PPL-3)', async () => {
+    const calls = fakeDrive([
+      [/^POST .*\/files\/f1\/permissions\?/, () => ({ json: { id: 'perm-1' } })],
+      [
+        /^GET .*\/files\/f1\/permissions\?/,
+        () => ({
+          json: {
+            permissions: [
+              { id: 'o', type: 'user', role: 'owner', emailAddress: 'me@example.test' },
+              { id: 'perm-1', type: 'user', role: 'reader', emailAddress: 'ana@example.test', displayName: 'Ana' },
+              { id: 'any', type: 'anyone', role: 'reader' },
+            ],
+          },
+        }),
+      ],
+      [/^DELETE .*\/files\/f1\/permissions\/perm-1$/, () => ({ text: '' })],
+    ]);
+    await storage().share('f1', 'ana@example.test');
+    expect(JSON.parse(calls[0]!.body!)).toEqual({ type: 'user', role: 'reader', emailAddress: 'ana@example.test' });
+    expect(new URL(calls[0]!.url).searchParams.get('sendNotificationEmail')).toBe('true');
+    expect(await storage().sharedWith('f1')).toEqual([{ id: 'perm-1', email: 'ana@example.test', name: 'Ana' }]);
+    await storage().unshare('f1', 'perm-1');
+    expect(calls.at(-1)!.method).toBe('DELETE');
+  });
+
   it('turns 401 into AuthExpiredError, and passes through an error from the token getter', async () => {
     fakeDrive([[/.*/, () => ({ status: 401, text: 'expired' })]]);
     await expect(storage().listCalendars()).rejects.toBeInstanceOf(AuthExpiredError);
