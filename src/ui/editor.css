@@ -150,6 +150,89 @@
   flex: 1;
 }
 
+/* ---- Select (Select.tsx): a drop-down whose options show a swatch ---- */
+.select {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.select-label {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.select-field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.select-field.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.select-value {
+  flex: 1;
+  min-width: 0;
+}
+
+.select-chevron {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.select-field .swatch,
+.select-list .swatch {
+  flex-shrink: 0;
+}
+
+/* In the page's flow below the field, like the month calendar: a dialog never clips it. */
+.select-list {
+  max-height: 18rem;
+  margin: 0;
+  padding: 0.25rem;
+  overflow-y: auto;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.select-list [role='option'] {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.5rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.select-list [role='option'].active {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+}
+
+/* The chosen type keeps a tick, so it stays findable while the arrows move away from it. */
+.select-list [role='option'].current::after {
+  content: '✓';
+  margin-left: auto;
+  color: var(--accent);
+}
+
+@media (forced-colors: active) {
+  .select-list [role='option'].active {
+    outline: 2px solid Highlight;
+  }
+}
+
 /* ---- Date range: one field and DayPicker (DateRangeFields), themed with the app's tokens ---- */
 .date-range {
   display: grid;

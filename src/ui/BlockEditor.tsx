@@ -6,8 +6,11 @@ import { updateRecord } from '../domain/edit';
 import { addRecord, live, STATUS_RANK, typeByKey, type Block, type BlockStatus, type PlanDoc } from '../domain/schema';
 import { swapHolidaysFor } from '../domain/swaps';
 import { useI18n } from '../i18n';
+import { looksFree } from './calendarModel';
 import { describeBlock } from './describe';
 import { DateRangeFields } from './DateRangeFields';
+import { BlockSwatch } from './Legend';
+import { Select } from './Select';
 import './editor.css';
 
 export type EditorTarget = { mode: 'new'; start: ISODate; end: ISODate } | { mode: 'edit'; blockId: string };
@@ -200,16 +203,17 @@ export function BlockEditor({ target, doc, personId, onSave, onDelete, onSwitch,
           </p>
         )}
 
-        <label>
-          {t('editor.type')}
-          <select value={draft.typeId} onChange={(e) => changeType(e.target.value)}>
-            {types.map((lt) => (
-              <option key={lt.id} value={lt.id}>
-                {name(lt.name)}
-              </option>
-            ))}
-          </select>
-        </label>
+        {/* Each type with its swatch in the chosen status, as the calendar will draw it. */}
+        <Select
+          label={t('editor.type')}
+          value={draft.typeId}
+          options={types.map((lt) => ({
+            value: lt.id,
+            label: name(lt.name),
+            icon: <BlockSwatch status={draft.status} free={looksFree(lt.key)} />,
+          }))}
+          onChange={changeType}
+        />
 
         <fieldset className="statuses">
           <legend>{t('editor.status')}</legend>

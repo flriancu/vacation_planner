@@ -88,7 +88,8 @@ test('an idea is outlined but not filled, and costs only uncovered days', async 
 test('leave around an office closure is outlined outside it, the closure inside', async ({ page, isMobile }) => {
   await selectRange(page, isMobile, '2027-08-10', '2027-08-12');
   let dialog = page.getByRole('dialog', { name: 'Concediu nou' });
-  await dialog.getByLabel('Tip').selectOption({ label: 'Birou închis' });
+  await dialog.getByRole('combobox', { name: 'Tip' }).click();
+  await dialog.getByRole('option', { name: 'Birou închis' }).click();
   await dialog.getByRole('radio', { name: 'Planificat' }).check();
   await dialog.getByRole('button', { name: 'Salvează' }).click();
   await selectRange(page, isMobile, '2027-08-05', '2027-08-18');
@@ -104,6 +105,45 @@ test('leave around an office closure is outlined outside it, the closure inside'
   await expect(outlines.nth(1)).toHaveAttribute('style', /--c: var\(--free-edge\); --i: 1/);
   // The outline turns at the top left of Thu 12 (row 1 starts on Thu 5): the corner is drawn.
   await expect(cell(page, '2027-08-12').locator('.outline.st-approved .corner.tl')).toHaveCount(1);
+});
+
+test('the leave type list shows each type as the calendar draws it', async ({ page, isMobile }) => {
+  await selectRange(page, isMobile, '2027-08-10', '2027-08-12');
+  const dialog = page.getByRole('dialog', { name: 'Concediu nou' });
+  const field = dialog.getByRole('combobox', { name: 'Tip' });
+  await expect(field).toHaveAccessibleName('Tip Concediu de odihnă');
+  await dialog.getByRole('radio', { name: 'Planificat' }).check();
+  await field.click();
+  await expect(field).toHaveAttribute('aria-expanded', 'true');
+  // Office closed in the "off anyway" colours, the other types in the leave colours, in the chosen status.
+  await expect(dialog.getByRole('option', { name: 'Birou închis' }).locator('.swatch')).toHaveClass(/free-block/);
+  await expect(dialog.getByRole('option', { name: 'Învoire' }).locator('.swatch')).toHaveClass(/fill-planned/);
+  await dialog.getByRole('option', { name: 'Birou închis' }).click();
+  await expect(field).toHaveAccessibleName('Tip Birou închis');
+  await expect(dialog.getByRole('listbox')).toBeHidden();
+});
+
+test('the leave type list works from the keyboard, and Escape closes only the list', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'needs a keyboard');
+  await selectRange(page, isMobile, '2027-08-10', '2027-08-12');
+  const dialog = page.getByRole('dialog', { name: 'Concediu nou' });
+  const field = dialog.getByRole('combobox', { name: 'Tip' });
+  await field.focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(dialog.getByRole('listbox')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(dialog.getByRole('listbox')).toBeHidden();
+  await expect(dialog).toBeVisible();
+  // Typing letters jumps to a name (diacritics optional), Enter chooses it.
+  await page.keyboard.type('bi');
+  await expect(field).toHaveAttribute('aria-activedescendant', /.+/);
+  await page.keyboard.press('Enter');
+  await expect(field).toHaveAccessibleName('Tip Birou închis');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('End');
+  await page.keyboard.press('Enter');
+  await expect(field).toHaveAccessibleName('Tip Concediu fără plată');
+  await expect(field).toBeFocused();
 });
 
 test('Escape cancels a half-made selection', async ({ page, isMobile }) => {

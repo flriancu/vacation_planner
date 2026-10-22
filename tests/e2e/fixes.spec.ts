@@ -111,7 +111,7 @@ test('planned leave cannot be saved over other planned leave (BLK-5)', async ({ 
 test('the editor opens with its title focused, not the leave-type list (iPhones open a focused list at once)', async ({ page }) => {
   const dialog = await newLeave(page, '2027-03-08', '2027-03-10');
   await expect(dialog.getByRole('heading', { name: 'Concediu nou' })).toBeFocused();
-  await expect(dialog.getByLabel('Tip')).not.toBeFocused();
+  await expect(dialog.getByRole('combobox', { name: 'Tip' })).not.toBeFocused();
   await dialog.getByRole('button', { name: 'Salvează' }).click();
   await cell(page, '2027-03-09').click();
   await expect(page.getByRole('dialog').getByRole('heading', { name: 'Editează concediul' })).toBeFocused();
@@ -135,7 +135,8 @@ test('a holiday can have only one swap day', async ({ page }) => {
     ['2027-01-25', false],
   ] as const) {
     const dialog = await newLeave(page, day, day);
-    await dialog.getByLabel('Tip').selectOption({ label: 'Zi compensatorie' });
+    await dialog.getByRole('combobox', { name: 'Tip' }).click();
+    await dialog.getByRole('option', { name: 'Zi compensatorie' }).click();
     await dialog.getByRole('radio', { name: 'Planificat' }).check();
     if (expectSaved) {
       await dialog.getByRole('button', { name: 'Salvează' }).click();
@@ -183,7 +184,10 @@ test('a day under two blocks says which block each line is about, and the break 
     ['2027-12-20', '2028-01-07', null, 'Aprobat'],
   ] as const) {
     const dialog = await newLeave(page, from, to);
-    if (type) await dialog.getByLabel('Tip').selectOption({ label: type });
+    if (type) {
+      await dialog.getByRole('combobox', { name: 'Tip' }).click();
+      await dialog.getByRole('option', { name: type }).click();
+    }
     await dialog.getByRole('radio', { name: status }).check();
     await dialog.getByRole('button', { name: 'Salvează' }).click();
     await expect(dialog).toBeHidden();

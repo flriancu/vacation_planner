@@ -37,6 +37,12 @@ export function buildWeeks(from: ISODate, to: ISODate): WeekModel[] {
   return weeks;
 }
 
+// Only office-closed days look like days off anyway; swap days are chosen and requested, so they look like leave.
+const FREE_TYPES: ReadonlySet<string> = new Set(['closed']);
+
+/** Whether leave of this type is drawn as a day off anyway (the calendar, the editor's swatches). */
+export const looksFree = (typeKey: string | undefined) => FREE_TYPES.has(typeKey ?? '');
+
 export interface Edges {
   top: boolean;
   right: boolean;

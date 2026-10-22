@@ -16,7 +16,7 @@ import type { LeaveDay } from '../domain/people';
 import { live, type Block, type PlanDoc } from '../domain/schema';
 import { useI18n } from '../i18n';
 import { describeBlock, type BlockDescription } from './describe';
-import { buildWeeks, clampDate, monthEdges, orderRange, outlineEdges, viewRange } from './calendarModel';
+import { buildWeeks, clampDate, looksFree, monthEdges, orderRange, outlineEdges, viewRange } from './calendarModel';
 import './calendar.css';
 
 /** Someone whose plan I follow, as the calendar draws them: one line under each day (PPL-4). */
@@ -47,9 +47,6 @@ interface Selection {
   anchor: ISODate;
   focus: ISODate;
 }
-
-// Only office-closed days look like days off anyway; swap days are chosen and requested, so they look like leave.
-const FREE_TYPES: ReadonlySet<string> = new Set(['closed']);
 
 /** Outlines drawn per day; more would crowd into the number (the tooltip still lists every block). */
 const MAX_OUTLINES = 4;
@@ -278,7 +275,7 @@ export function Calendar({ year, doc, personId, today, others = [], together, on
   const [selStart, selEnd] = selection ? orderRange(selection.anchor, selection.focus) : ['', ''];
   // A day off is a day off: one accent for all leave (swap days included); office-closed days
   // look like any other day off anyway, with a neutral outline (theme.css).
-  const isFree = (b: Block) => FREE_TYPES.has(doc.leaveTypes[b.typeId]?.key ?? '');
+  const isFree = (b: Block) => looksFree(doc.leaveTypes[b.typeId]?.key);
   // Office-closed days: a darker shade of the "off anyway" fill, as leave's outline is of the leave fill.
   const typeColor = (b: Block) => (isFree(b) ? 'var(--free-edge)' : 'var(--leave)');
 
