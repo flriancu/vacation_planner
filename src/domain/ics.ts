@@ -17,7 +17,11 @@ export interface IcsEvent {
   updatedAt: Stamp;
 }
 
-/** The domain the event ids are made unique in (RFC 5545: UID is globally unique). */
+/**
+ * The domain the event ids are made unique in (RFC 5545: UID is globally unique). It names the
+ * app, not the address it is served from, and never changes: a new value gives every event a new
+ * UID, so importing a file again would add copies of events the calendar already has.
+ */
 const UID_DOMAIN = 'concediu.floriniancu.ro';
 
 /** My blocks of `year` with one of `statuses`, earliest first. */

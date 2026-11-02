@@ -63,6 +63,12 @@ describe('blocksForCalendar', () => {
     b.block('annual', '2028-05-03', '2028-05-03', 'idea');
     b.block('annual', '2029-01-10', '2029-01-10', 'approved');
     expect(blocksForCalendar(b.doc, b.personId, 2028, ['planned', 'approved'])).toEqual([c, a]);
+  });
+
+  it('keeps the event id domain fixed, whatever address the app is served from', () => {
+    // Pinned on purpose: a new domain would make every re-imported event a duplicate.
+    const b = new DocBuilder();
+    const a = b.block('annual', '2028-08-07', '2028-08-11', 'approved');
     expect(eventUid(a)).toBe(`${a.id}@concediu.floriniancu.ro`);
   });
 

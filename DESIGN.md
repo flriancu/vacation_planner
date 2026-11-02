@@ -215,12 +215,28 @@ One class, no React: open, auto-save, merge, retry, refresh and close, with ever
 
 1. Create a Cloud project `vacation-planner`.
 2. Enable the **Google Drive API** and the **Google Calendar API** (plus the **Google Picker API** in v2).
-3. Configure the OAuth consent screen: user type *External*, app name and support e-mail, scopes as in §5.1, publishing status **In production** (AUTH-4).
+3. Configure the OAuth consent screen: user type *External*, app name and support e-mail, scopes as in §5.1, publishing status **In production** (AUTH-4), and the address settings in §5.4.
 4. Create an OAuth client ID of type *Web application*:
-   - authorized JavaScript origins: `https://concediu.floriniancu.ro` and `http://localhost:5173`;
+   - authorized JavaScript origins: `https://concediu.fei.ro` and `http://localhost:5173`;
    - redirect URIs: none (the token model doesn't use them).
 5. v2 only: create an API key restricted to the Picker API and the same origins.
 6. Put the client ID in `src/config.ts`. It is not secret, so it's committed.
+
+### 5.4 Address
+
+The app is served from `https://concediu.fei.ro` (NF-1). The address is set outside the code, so changing it means updating every place below; sign-in fails until the Google settings match.
+
+| Where | Setting |
+|---|---|
+| DNS, Route 53 zone `fei.ro` | CNAME `concediu` → `flriancu.github.io`, and the TXT record GitHub uses to verify `fei.ro` |
+| GitHub, repo settings, Pages | Custom domain `concediu.fei.ro`, Enforce HTTPS on |
+| Google Cloud, OAuth client | Authorized JavaScript origin `https://concediu.fei.ro` |
+| Google Cloud, consent screen branding | Authorized domain `fei.ro`; home page, privacy policy and terms links under `https://concediu.fei.ro/` |
+| Google Cloud, Picker API key | Website restriction `https://concediu.fei.ro/*` |
+| Repo | The live link in `README.md`, NF-1, this section, and the comment in `vite.config.ts` |
+
+- Browser storage belongs to one address: after a move, each device starts with an empty device copy (§4.5) and the session ends. The plan itself is in Drive and loads after sign-in.
+- The domain inside exported event ids (`UID_DOMAIN` in `domain/ics.ts`) is not the address and never changes (IO-2): a unit test pins it.
 
 ## 6. Domain algorithms
 
@@ -353,6 +369,6 @@ The excused balance uses the same formulas with its quota and no adjustments; it
 | Reconnecting can be blocked by Safari's tracking protection or by pop-up blockers on phones | Unsaved changes stay in this device's copy (§4.5) until a sign-in works; test on iOS Safari. |
 | Two of my devices save within the same second (§4.2) | The losing device merges its records back on its next save, refresh or open (§4.5). |
 | A device's clock is wrong | `nextStamp` (`domain/clock.ts`): an edit is always stamped later than what it saw, so a fast clock can't undo later edits; truly simultaneous edits still go to the later clock. |
-| Every GitHub Pages site of an account shares one origin (`flriancu.github.io`), so they can read each other's storage | The app has its own subdomain (`concediu.floriniancu.ro`, NF-1). |
+| Every GitHub Pages site of an account shares one origin (`flriancu.github.io`), so they can read each other's storage | The app has its own subdomain (`concediu.fei.ro`, NF-1, §5.4). |
 | A Romanian holiday law change | Per-year overrides (DAY-3); the fixed list lives in one file. |
 | The plan proposal's weight `k` feels wrong | It's a single number, tuned locally against my past plans; the slider covers personal preference. |
