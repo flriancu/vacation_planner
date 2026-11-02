@@ -50,7 +50,7 @@ function HolidayDayButton({ day, modifiers, ...button }: DayButtonProps) {
 }
 
 /**
- * The editor's dates, with DayPicker (the same library as the dm app): one field showing the
+ * The editor's dates, with DayPicker: one field showing the
  * range in words, and an inline month calendar where you click the first day, then the last (in
  * either order), with the range previewed in between. Inline, so the editor dialog never clips it.
  * Marked like the main calendar: off-anyway tint, holiday dots (name in the tooltip), today.
